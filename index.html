@@ -16,7 +16,10 @@
       <div class="topbar">
         <button id="settingsBtn" class="icon-btn" aria-label="Employee settings">☰</button>
         <div class="brand-pill">CHECKCAM</div>
-        <button id="flipBtn" class="icon-btn" aria-label="Switch camera">↻</button>
+        <div class="top-actions">
+          <button id="mirrorBtn" class="mirror-btn active" type="button" aria-pressed="true" aria-label="Toggle mirror mode">MIRROR ON</button>
+          <button id="flipBtn" class="icon-btn" aria-label="Switch camera">↻</button>
+        </div>
       </div>
 
       <div id="permissionCard" class="permission-card">
@@ -61,7 +64,7 @@
         <label>Employee ID<input id="employeeId" autocomplete="off" placeholder="EMP-001" /></label>
         <label>Employee name<input id="employeeName" autocomplete="name" placeholder="Your name" /></label>
         <label>Work site<input id="siteName" autocomplete="organization" placeholder="Main Office" /></label>
-        <p class="helper">Saved only on this device. Your Apps Script endpoint is configured in <code>app.js</code>.</p>
+        <p class="helper">Details are saved on this device when you tap Done. Mirror mode controls both the live preview and the saved photo so they always match.</p>
       </div>
     </aside>
 
