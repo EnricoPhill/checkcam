@@ -44,12 +44,19 @@
       </div>
 
       <div id="stamp" class="stamp">
-        <div class="stamp-topline">
-          <span id="actionBadge" class="action-badge in">ABSEN MASUK</span>
-          <span id="accuracyBadge" class="accuracy-badge">Accuracy --</span>
+        <div class="stamp-header">
+          <div class="stamp-primary">
+            <span id="actionBadge" class="action-badge in">ABSEN MASUK</span>
+            <div id="clock" class="stamp-time">--:--</div>
+            <div id="date" class="stamp-date">---</div>
+          </div>
+          <div class="stamp-side">
+            <span id="accuracyBadge" class="accuracy-badge">Accuracy --</span>
+            <div id="stampLogoBox" class="stamp-logo-box hidden">
+              <img id="stampLogo" alt="Logo overlay" />
+            </div>
+          </div>
         </div>
-        <div id="clock" class="stamp-time">--:--</div>
-        <div id="date" class="stamp-date">---</div>
         <div class="stamp-divider"></div>
         <div class="stamp-line"><strong id="stampEmployee">Belum diatur</strong></div>
         <div class="stamp-line muted"><span>OPD: </span><span id="stampOpd">Belum diatur</span></div>
@@ -81,6 +88,23 @@
         <label>ID Pegawai <span class="optional-label">(opsional)</span><input id="employeeId" autocomplete="off" placeholder="EMP-001 (opsional)" /></label>
         <label>Nama Pegawai<input id="employeeName" autocomplete="name" placeholder="Nama lengkap" /></label>
         <label>OPD / Company<input id="opdName" autocomplete="organization" placeholder="Nama OPD / Perusahaan" /></label>
+
+        <section class="logo-setting" aria-labelledby="logoSettingTitle">
+          <div id="logoSettingTitle" class="setting-label">Logo overlay <span class="optional-label">(opsional)</span></div>
+          <div class="logo-setting-row">
+            <div class="logo-preview-shell">
+              <img id="logoPreview" class="hidden" alt="Preview logo overlay" />
+              <span id="logoEmpty">Tanpa logo</span>
+            </div>
+            <div class="logo-actions">
+              <label class="logo-file-btn">Pilih / Ganti Logo
+                <input id="logoInput" type="file" accept="image/png,image/jpeg,image/webp" />
+              </label>
+              <button id="removeLogoBtn" class="logo-remove-btn" type="button">Hapus Logo</button>
+            </div>
+          </div>
+          <p class="logo-helper">Logo disimpan di perangkat ini dan tetap tersedia saat offline. PNG transparan direkomendasikan.</p>
+        </section>
 
         <fieldset class="location-fieldset">
           <legend>Nama lokasi</legend>

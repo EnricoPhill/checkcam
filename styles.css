@@ -41,21 +41,25 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .primary-btn { background: #fff; color: #0c0f13; }
 .secondary-btn { background: #292d34; color: #fff; }
 
-/* Compact timestamp card: anchored to the bottom-left of the actual video frame. */
-.stamp { position: absolute; z-index: 5; left: 12px; top: auto; width: max-content; max-width: min(72vw, 292px); padding: 8px 9px; border-radius: 11px; background: rgba(8,11,14,.68); border: 1px solid rgba(255,255,255,.17); box-shadow: 0 7px 24px rgba(0,0,0,.22); text-shadow: 0 1px 2px rgba(0,0,0,.72); }
-.stamp-topline { display: flex; align-items: center; gap: 6px; }
-.action-badge, .accuracy-badge { display: inline-flex; align-items: center; min-height: 18px; padding: 2px 6px; border-radius: 999px; font-size: 7.5px; line-height: 1; font-weight: 900; letter-spacing: .035em; white-space: nowrap; }
+/* v8 overlay: larger, balanced, and still anchored bottom-left of the real video frame. */
+.stamp { position: absolute; z-index: 5; left: 12px; top: auto; width: min(80vw, 340px); max-width: min(80vw, 340px); padding: 11px 12px; border-radius: 14px; background: rgba(8,11,14,.70); border: 1px solid rgba(255,255,255,.17); box-shadow: 0 8px 26px rgba(0,0,0,.24); text-shadow: 0 1px 2px rgba(0,0,0,.72); }
+.stamp-header { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 12px; align-items: start; }
+.stamp-primary { min-width: 0; }
+.stamp-side { display: grid; justify-items: end; align-content: start; gap: 7px; min-width: 66px; }
+.action-badge, .accuracy-badge { display: inline-flex; align-items: center; min-height: 20px; padding: 3px 7px; border-radius: 999px; font-size: 8.5px; line-height: 1; font-weight: 900; letter-spacing: .035em; white-space: nowrap; }
 .action-badge.in { background: rgba(67,209,122,.94); color: #07140c; }
 .action-badge.out { background: rgba(255,90,103,.94); color: #1c0507; }
 .accuracy-badge { background: rgba(255,255,255,.12); color: #fff; }
 .accuracy-badge.ok { background: rgba(67,209,122,.17); color: #d5ffe3; }
-.stamp-time { margin-top: 3px; font-size: clamp(23px, 6.4vw, 32px); font-weight: 900; letter-spacing: -.045em; line-height: .98; }
-.stamp-date { margin-top: 1px; color: #e7eaee; font-size: 9px; font-weight: 700; }
-.stamp-divider { height: 1px; margin: 5px 0 4px; background: rgba(255,255,255,.17); }
-.stamp-line { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 270px; font-size: 9.5px; line-height: 1.28; }
-.stamp-line.muted { color: #d1d5da; margin-top: 1px; }
-.stamp-line.subtle { color: #aeb5be; margin-top: 1px; font-size: 8.5px; }
-.stamp-line.work { margin-top: 3px; color: #f4f6f8; font-size: 9px; }
+.stamp-time { margin-top: 5px; font-size: clamp(30px, 7.8vw, 39px); font-weight: 900; letter-spacing: -.045em; line-height: .96; }
+.stamp-date { margin-top: 3px; color: #e7eaee; font-size: 10.5px; font-weight: 700; }
+.stamp-logo-box { width: 56px; height: 56px; padding: 4px; border-radius: 10px; display: grid; place-items: center; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.13); overflow: hidden; }
+.stamp-logo-box img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.stamp-divider { height: 1px; margin: 8px 0 7px; background: rgba(255,255,255,.17); }
+.stamp-line { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 316px; font-size: 11px; line-height: 1.34; }
+.stamp-line.muted { color: #d1d5da; margin-top: 2px; }
+.stamp-line.subtle { color: #aeb5be; margin-top: 2px; font-size: 10px; }
+.stamp-line.work { margin-top: 5px; color: #f4f6f8; font-size: 10.5px; }
 
 .camera-controls { position: absolute; z-index: 7; left: 0; right: 0; bottom: 0; padding: 8px 20px calc(env(safe-area-inset-bottom) + 14px); background: linear-gradient(to top, rgba(0,0,0,.82), rgba(0,0,0,.32), transparent); }
 .mode-strip { height: 32px; display: flex; justify-content: center; gap: 6px; margin: 0 auto 6px; }
@@ -91,6 +95,18 @@ input:focus { border-color: rgba(255,255,255,.38); }
 .location-box-label { color: #8f98a4; font-size: 10px; font-weight: 750; }
 .location-box strong { font-size: 12px; line-height: 1.35; }
 .manual-location { margin-top: 10px; }
+.logo-setting { margin-top: 18px; }
+.setting-label { color: #dce0e6; font-size: 13px; font-weight: 750; }
+.logo-setting-row { display: grid; grid-template-columns: 92px minmax(0,1fr); gap: 12px; align-items: center; margin-top: 8px; }
+.logo-preview-shell { width: 92px; height: 72px; display: grid; place-items: center; overflow: hidden; border: 1px solid rgba(255,255,255,.11); border-radius: 13px; background: #0f1216; color: #858e99; font-size: 10px; font-weight: 700; text-align: center; padding: 6px; }
+.logo-preview-shell img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.logo-actions { display: grid; gap: 8px; }
+.logo-file-btn, .logo-remove-btn { width: 100%; min-height: 38px; border-radius: 11px; padding: 9px 11px; font-size: 11px; font-weight: 850; text-align: center; }
+.logo-file-btn { display: grid; place-items: center; margin: 0; border: 0; background: #f2f4f6; color: #0c0f13; cursor: pointer; }
+.logo-file-btn input { display: none; }
+.logo-remove-btn { border: 1px solid rgba(255,255,255,.12); background: #0f1216; color: #dce0e6; }
+.logo-remove-btn:disabled { opacity: .42; cursor: default; }
+.logo-helper { margin: 8px 0 0; color: #858e99; font-size: 10.5px; line-height: 1.45; }
 .preview-panel { align-items: center; padding: 14px; }
 .preview-card { width: min(100%, 560px); background: #12161b; border: 1px solid rgba(255,255,255,.12); border-radius: 20px; overflow: hidden; padding: 10px; }
 .preview-card img { display: block; width: 100%; max-height: 76svh; object-fit: contain; border-radius: 12px; background: #050607; }
@@ -111,7 +127,7 @@ input:focus { border-color: rgba(255,255,255,.38); }
   .round-btn { width: 40px; height: 40px; }
   .mirror-btn { padding: 0 8px; font-size: 8px; }
   .brand { font-size: 9px; }
-  .stamp { max-width: 72vw; }
+  .stamp { width: min(82vw, 318px); max-width: min(82vw, 318px); }
   .camera-controls { padding-left: 14px; padding-right: 14px; }
   .zoom-control { width: 126px; right: 10px; }
 }

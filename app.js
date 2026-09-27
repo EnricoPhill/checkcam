@@ -41,6 +41,12 @@ const stampOpd = $('stampOpd');
 const stampLocationName = $('stampLocationName');
 const stampCoordinates = $('stampCoordinates');
 const stampWorkDuration = $('stampWorkDuration');
+const stampLogoBox = $('stampLogoBox');
+const stampLogo = $('stampLogo');
+const logoPreview = $('logoPreview');
+const logoEmpty = $('logoEmpty');
+const logoInput = $('logoInput');
+const removeLogoBtn = $('removeLogoBtn');
 const accuracyBadge = $('accuracyBadge');
 const clock = $('clock');
 const date = $('date');
@@ -73,6 +79,7 @@ let geocodeRequestId = 0;
 let zoomRaf = null;
 let syncBadgeTimer = null;
 let syncingPending = false;
+let overlayLogoData = '';
 
 const DB_NAME = 'checkcam-db';
 const DB_VERSION = 1;
@@ -95,6 +102,78 @@ function getLocationMode() {
 function getResolvedLocationName() {
   if (getLocationMode() === 'manual') return manualLocationName.value.trim();
   return liveLocationName || '';
+}
+
+function hasOverlayLogo() {
+  return Boolean(overlayLogoData && stampLogo.complete && stampLogo.naturalWidth > 0);
+}
+
+function applyOverlayLogo(dataUrl, persist = true) {
+  overlayLogoData = dataUrl || '';
+  if (persist) {
+    if (overlayLogoData) localStorage.setItem('checkcam.overlayLogo', overlayLogoData);
+    else localStorage.removeItem('checkcam.overlayLogo');
+  }
+
+  if (overlayLogoData) {
+    stampLogo.src = overlayLogoData;
+    logoPreview.src = overlayLogoData;
+    stampLogoBox.classList.remove('hidden');
+    logoPreview.classList.remove('hidden');
+    logoEmpty.classList.add('hidden');
+    removeLogoBtn.disabled = false;
+  } else {
+    stampLogo.removeAttribute('src');
+    logoPreview.removeAttribute('src');
+    stampLogoBox.classList.add('hidden');
+    logoPreview.classList.add('hidden');
+    logoEmpty.classList.remove('hidden');
+    removeLogoBtn.disabled = true;
+  }
+  requestAnimationFrame(positionStampInsideVideo);
+}
+
+function loadOverlayLogo() {
+  applyOverlayLogo(localStorage.getItem('checkcam.overlayLogo') || '', false);
+}
+
+function resizeLogoFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error || new Error('Logo tidak dapat dibaca.'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('File logo tidak valid.'));
+      img.onload = () => {
+        const maxSide = 320;
+        const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+        const w = Math.max(1, Math.round(img.naturalWidth * scale));
+        const h = Math.max(1, Math.round(img.naturalHeight * scale));
+        const c = document.createElement('canvas');
+        c.width = w;
+        c.height = h;
+        const cctx = c.getContext('2d');
+        cctx.clearRect(0, 0, w, h);
+        cctx.drawImage(img, 0, 0, w, h);
+        resolve(c.toDataURL('image/png'));
+      };
+      img.src = String(reader.result || '');
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function chooseOverlayLogo(file) {
+  if (!file) return;
+  try {
+    const dataUrl = await resizeLogoFile(file);
+    applyOverlayLogo(dataUrl, true);
+  } catch (err) {
+    console.error(err);
+    alert('Logo tidak dapat diproses. Gunakan PNG, JPG, atau WebP.');
+  } finally {
+    logoInput.value = '';
+  }
 }
 
 function loadProfile() {
@@ -445,10 +524,11 @@ function positionStampInsideVideo() {
   const pad = Math.max(10, Math.min(14, videoRect.width * 0.03));
   stamp.style.left = `${videoRect.left - stageRect.left + pad}px`;
   stamp.style.right = 'auto';
-  stamp.style.width = 'max-content';
-  stamp.style.maxWidth = `${Math.min(292, Math.max(190, videoRect.width * 0.72))}px`;
+  const stampW = Math.min(340, Math.max(250, videoRect.width * 0.80));
+  stamp.style.width = `${stampW}px`;
+  stamp.style.maxWidth = `${stampW}px`;
   stamp.style.bottom = 'auto';
-  const stampH = stamp.offsetHeight || 138;
+  const stampH = stamp.offsetHeight || 164;
   const top = videoRect.bottom - stageRect.top - stampH - pad;
   const minimumTop = videoRect.top - stageRect.top + pad;
   stamp.style.top = `${Math.max(minimumTop, top)}px`;
@@ -465,19 +545,40 @@ function roundedRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
+function getStampLayoutUnits() {
+  const logo = hasOverlayLogo();
+  const location = Boolean(getResolvedLocationName());
+  const headerBottom = logo ? 88 : 76;
+  const nameY = headerBottom + 17;
+  const opdY = nameY + 15;
+  const locationY = location ? opdY + 15 : null;
+  const coordY = location ? locationY + 14 : opdY + 14;
+  const workY = coordY + 17;
+  return {
+    logo,
+    location,
+    headerBottom,
+    nameY,
+    opdY,
+    locationY,
+    coordY,
+    workY,
+    height: workY + 12
+  };
+}
+
 function getStampCanvasRect(outputW, outputH) {
   const videoRect = getVisibleVideoRect();
   const stampRect = stamp.getBoundingClientRect();
   const scaleX = outputW / videoRect.width;
   const scaleY = outputH / videoRect.height;
 
-  // Keep the saved-photo card compact and bottom-left anchored.
-  // Do not use the DOM element's height: browser layout can report extra
-  // vertical space that is not part of the visible card content.
+  // Use a content-derived height so the saved stamp never grows into a tall empty box.
   const x = (stampRect.left - videoRect.left) * scaleX;
   const w = stampRect.width * scaleX;
-  const unit = Math.max(1, w / 270);
-  const contentHeight = (getResolvedLocationName() ? 146 : 133) * unit;
+  const unit = Math.max(1, w / 320);
+  const layout = getStampLayoutUnits();
+  const contentHeight = layout.height * unit;
   const bottomGap = Math.max(0, (videoRect.bottom - stampRect.bottom) * scaleY);
   const y = Math.max(0, outputH - bottomGap - contentHeight);
 
@@ -485,7 +586,8 @@ function getStampCanvasRect(outputW, outputH) {
     x: Math.max(0, x),
     y,
     w: Math.min(w, outputW - Math.max(0, x)),
-    h: Math.min(contentHeight, outputH - y)
+    h: Math.min(contentHeight, outputH - y),
+    layout
   };
 }
 
@@ -496,85 +598,104 @@ function fitText(ctx, text, maxWidth) {
   return `${t}…`;
 }
 
+function drawContainedImage(ctx, img, x, y, w, h) {
+  if (!img || !img.naturalWidth || !img.naturalHeight) return;
+  const scale = Math.min(w / img.naturalWidth, h / img.naturalHeight);
+  const dw = img.naturalWidth * scale;
+  const dh = img.naturalHeight * scale;
+  ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+}
+
 function drawStamp(ctx, width, height, capturedAt, durationMs) {
   const r = getStampCanvasRect(width, height);
-  const unit = Math.max(1, r.w / 270);
-  const pad = 9 * unit;
-  const radius = 11 * unit;
+  const layout = r.layout || getStampLayoutUnits();
+  const unit = Math.max(1, r.w / 320);
+  const pad = 12 * unit;
+  const radius = 14 * unit;
   const left = r.x + pad;
   const right = r.x + r.w - pad;
 
   ctx.save();
-  ctx.fillStyle = 'rgba(8, 11, 14, 0.72)';
+  ctx.fillStyle = 'rgba(8, 11, 14, 0.74)';
   roundedRect(ctx, r.x, r.y, r.w, r.h, radius);
   ctx.fill();
   ctx.strokeStyle = 'rgba(255,255,255,.18)';
   ctx.lineWidth = Math.max(1, unit);
   ctx.stroke();
 
-  const badgeH = 18 * unit;
-  ctx.font = `900 ${7.5 * unit}px system-ui`;
+  const badgeH = 20 * unit;
+  ctx.textBaseline = 'middle';
+  ctx.font = `900 ${8.5 * unit}px system-ui`;
   const actionText = action === 'IN' ? 'ABSEN MASUK' : 'ABSEN PULANG';
-  const actionW = ctx.measureText(actionText).width + 13 * unit;
+  const actionW = ctx.measureText(actionText).width + 14 * unit;
   ctx.fillStyle = action === 'IN' ? 'rgba(67,209,122,.96)' : 'rgba(255,90,103,.96)';
-  roundedRect(ctx, left, r.y + 8 * unit, actionW, badgeH, badgeH / 2);
+  roundedRect(ctx, left, r.y + 11 * unit, actionW, badgeH, badgeH / 2);
   ctx.fill();
   ctx.fillStyle = action === 'IN' ? '#07140c' : '#1c0507';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(actionText, left + 6.5 * unit, r.y + 17 * unit);
+  ctx.fillText(actionText, left + 7 * unit, r.y + 21 * unit);
 
   const accText = accuracyText();
-  ctx.font = `850 ${7.5 * unit}px system-ui`;
-  const accW = Math.min(right - left - actionW - 5 * unit, ctx.measureText(accText).width + 12 * unit);
-  if (accW > 35 * unit) {
-    const accX = left + actionW + 5 * unit;
-    ctx.fillStyle = position ? 'rgba(67,209,122,.18)' : 'rgba(255,255,255,.12)';
-    roundedRect(ctx, accX, r.y + 8 * unit, accW, badgeH, badgeH / 2);
-    ctx.fill();
-    ctx.fillStyle = position ? '#d5ffe3' : '#fff';
-    ctx.fillText(fitText(ctx, accText, accW - 10 * unit), accX + 5 * unit, r.y + 17 * unit);
-  }
+  ctx.font = `850 ${8.5 * unit}px system-ui`;
+  const accW = Math.min(104 * unit, ctx.measureText(accText).width + 14 * unit);
+  const accX = right - accW;
+  ctx.fillStyle = position ? 'rgba(67,209,122,.18)' : 'rgba(255,255,255,.12)';
+  roundedRect(ctx, accX, r.y + 11 * unit, accW, badgeH, badgeH / 2);
+  ctx.fill();
+  ctx.fillStyle = position ? '#d5ffe3' : '#fff';
+  ctx.fillText(fitText(ctx, accText, accW - 10 * unit), accX + 5 * unit, r.y + 21 * unit);
 
   ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = '#fff';
-  ctx.font = `900 ${28 * unit}px system-ui`;
-  ctx.fillText(clockFormatter.format(capturedAt), left, r.y + 51 * unit);
+  ctx.font = `900 ${34 * unit}px system-ui`;
+  ctx.fillText(clockFormatter.format(capturedAt), left, r.y + 58 * unit);
   ctx.fillStyle = '#e7eaee';
-  ctx.font = `700 ${9 * unit}px system-ui`;
-  ctx.fillText(dateFormatter.format(capturedAt), left, r.y + 64 * unit);
+  ctx.font = `700 ${10.5 * unit}px system-ui`;
+  ctx.fillText(dateFormatter.format(capturedAt), left, r.y + 73 * unit);
+
+  if (layout.logo && hasOverlayLogo()) {
+    const logoW = 56 * unit;
+    const logoH = 56 * unit;
+    const logoX = right - logoW;
+    const logoY = r.y + 30 * unit;
+    ctx.fillStyle = 'rgba(255,255,255,.08)';
+    roundedRect(ctx, logoX, logoY, logoW, logoH, 10 * unit);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.13)';
+    ctx.lineWidth = Math.max(1, .8 * unit);
+    ctx.stroke();
+    drawContainedImage(ctx, stampLogo, logoX + 4 * unit, logoY + 4 * unit, logoW - 8 * unit, logoH - 8 * unit);
+  }
 
   ctx.strokeStyle = 'rgba(255,255,255,.17)';
   ctx.lineWidth = Math.max(1, .8 * unit);
   ctx.beginPath();
-  ctx.moveTo(left, r.y + 71 * unit);
-  ctx.lineTo(right, r.y + 71 * unit);
+  ctx.moveTo(left, r.y + layout.headerBottom * unit);
+  ctx.lineTo(right, r.y + layout.headerBottom * unit);
   ctx.stroke();
 
   const maxText = right - left;
   ctx.fillStyle = '#fff';
-  ctx.font = `800 ${9.5 * unit}px system-ui`;
+  ctx.font = `800 ${11 * unit}px system-ui`;
   const name = employeeName.value.trim() || 'Belum diatur';
-  ctx.fillText(fitText(ctx, name, maxText), left, r.y + 85 * unit);
+  ctx.fillText(fitText(ctx, name, maxText), left, r.y + layout.nameY * unit);
 
   ctx.fillStyle = '#d1d5da';
-  ctx.font = `650 ${8.7 * unit}px system-ui`;
-  ctx.fillText(fitText(ctx, `OPD: ${opdName.value.trim() || 'Belum diatur'}`, maxText), left, r.y + 98 * unit);
+  ctx.font = `650 ${10.2 * unit}px system-ui`;
+  ctx.fillText(fitText(ctx, `OPD: ${opdName.value.trim() || 'Belum diatur'}`, maxText), left, r.y + layout.opdY * unit);
 
   const locationName = getResolvedLocationName();
-  let nextY = 111;
-  if (locationName) {
-    ctx.fillText(fitText(ctx, locationName, maxText), left, r.y + nextY * unit);
-    nextY += 12;
+  if (layout.location && locationName) {
+    ctx.fillText(fitText(ctx, locationName, maxText), left, r.y + layout.locationY * unit);
   }
 
   const coordText = position ? `${position.coords.latitude.toFixed(5)}, ${position.coords.longitude.toFixed(5)}` : 'Koordinat belum tersedia';
   ctx.fillStyle = '#aeb5be';
-  ctx.font = `600 ${8 * unit}px system-ui`;
-  ctx.fillText(fitText(ctx, coordText, maxText), left, r.y + nextY * unit);
+  ctx.font = `600 ${9.5 * unit}px system-ui`;
+  ctx.fillText(fitText(ctx, coordText, maxText), left, r.y + layout.coordY * unit);
 
   ctx.fillStyle = '#f4f6f8';
-  ctx.font = `750 ${8.5 * unit}px system-ui`;
-  ctx.fillText(fitText(ctx, `Waktu Kerja: ${action === 'IN' ? '00:00' : formatDuration(durationMs)}`, maxText), left, r.y + (nextY + 13) * unit);
+  ctx.font = `750 ${10 * unit}px system-ui`;
+  ctx.fillText(fitText(ctx, `Waktu Kerja: ${action === 'IN' ? '00:00' : formatDuration(durationMs)}`, maxText), left, r.y + layout.workY * unit);
   ctx.restore();
 }
 
@@ -1011,6 +1132,9 @@ closeSettings.addEventListener('click', closeSettingsPanel);
 [employeeId, employeeName, opdName, manualLocationName].forEach((el) => el.addEventListener('change', refreshStamp));
 employeeId.addEventListener('change', updateWorkDuration);
 [locationModeLive, locationModeManual].forEach((el) => el.addEventListener('change', updateLocationModeUi));
+logoInput.addEventListener('change', () => chooseOverlayLogo(logoInput.files?.[0]));
+removeLogoBtn.addEventListener('click', () => applyOverlayLogo('', true));
+stampLogo.addEventListener('load', () => requestAnimationFrame(positionStampInsideVideo));
 retakeBtn.addEventListener('click', closePreview);
 submitBtn.addEventListener('click', submitAttendance);
 historyBtn.addEventListener('click', () => {
@@ -1031,6 +1155,7 @@ window.addEventListener('offline', () => updateSyncBadge());
 
 enableSwipeToClose(settingsPanel, settingsCard, settingsHandle, closeSettingsPanel);
 registerServiceWorker();
+loadOverlayLogo();
 loadProfile();
 setAction('IN');
 refreshStamp();
