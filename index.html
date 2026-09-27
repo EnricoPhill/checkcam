@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="id">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -15,44 +15,52 @@
       <div id="captureFlash" class="capture-flash" aria-hidden="true"></div>
 
       <div class="topbar">
-        <button id="settingsBtn" class="round-btn" aria-label="Employee details">☰</button>
+        <button id="settingsBtn" class="round-btn" aria-label="Data pegawai">☰</button>
         <div class="brand-wrap">
           <span class="brand">CHECKCAM</span>
           <span id="cameraLabel" class="camera-label">FRONT</span>
         </div>
-        <button id="mirrorBtn" class="mirror-btn active" type="button" aria-pressed="true" aria-label="Toggle mirror mode">
+        <button id="mirrorBtn" class="mirror-btn active" type="button" aria-pressed="true" aria-label="Mirror kamera">
           <span class="mirror-icon">⇆</span><span id="mirrorLabel">MIRROR</span>
         </button>
       </div>
 
+      <div id="zoomControl" class="zoom-control hidden" aria-label="Zoom kamera belakang">
+        <span id="zoomValue">1.0×</span>
+        <input id="zoomSlider" type="range" min="1" max="1" step="0.1" value="1" aria-label="Zoom" />
+      </div>
+
       <div id="permissionCard" class="permission-card">
         <div class="permission-icon">📷</div>
-        <h1>Camera check-in</h1>
-        <p>Allow camera and location. Full-frame mode avoids preview cropping. The saved photo uses the same camera frame and mirror view you see here.</p>
-        <button id="startBtn" class="primary-btn">Allow camera & location</button>
+        <h1>CheckCam</h1>
+        <p>Izinkan kamera dan lokasi. Foto menggunakan frame penuh yang sama seperti preview kamera.</p>
+        <button id="startBtn" class="primary-btn">Izinkan kamera & lokasi</button>
       </div>
 
       <div id="stamp" class="stamp">
         <div class="stamp-topline">
-          <span id="actionBadge" class="action-badge in">CLOCK IN</span>
-          <span id="gpsBadge" class="gps-badge">GPS…</span>
+          <span id="actionBadge" class="action-badge in">ABSEN MASUK</span>
+          <span id="accuracyBadge" class="accuracy-badge">Accuracy --</span>
         </div>
         <div id="clock" class="stamp-time">--:--:--</div>
         <div id="date" class="stamp-date">---</div>
         <div class="stamp-divider"></div>
-        <div class="stamp-person"><strong id="stampEmployee">Not set</strong><span> • </span><span id="stampSite">Work Site</span></div>
-        <div id="stampLocation" class="stamp-location">Waiting for GPS</div>
+        <div class="stamp-line"><strong id="stampEmployee">Belum diatur</strong></div>
+        <div class="stamp-line muted"><span>OPD: </span><span id="stampOpd">Belum diatur</span></div>
+        <div id="stampLocationName" class="stamp-line muted">Menunggu lokasi</div>
+        <div id="stampCoordinates" class="stamp-line subtle">--</div>
+        <div class="stamp-line work"><span>Waktu Kerja: </span><strong id="stampWorkDuration">00:00:00</strong></div>
       </div>
 
       <div class="camera-controls">
-        <div class="mode-strip" role="group" aria-label="Attendance action">
-          <button id="inBtn" class="mode active">IN</button>
-          <button id="outBtn" class="mode">OUT</button>
+        <div class="mode-strip" role="group" aria-label="Jenis absensi">
+          <button id="inBtn" class="mode active">MASUK</button>
+          <button id="outBtn" class="mode">PULANG</button>
         </div>
         <div class="shutter-row">
-          <button id="historyBtn" class="round-btn control-side" aria-label="Recent records">▤</button>
-          <button id="shutterBtn" class="shutter" aria-label="Take attendance photo" disabled><span></span></button>
-          <button id="flipBtn" class="round-btn control-side flip-btn" aria-label="Switch front or rear camera">↻</button>
+          <button id="historyBtn" class="round-btn control-side" aria-label="Riwayat">▤</button>
+          <button id="shutterBtn" class="shutter" aria-label="Ambil foto absensi" disabled><span></span></button>
+          <button id="flipBtn" class="round-btn control-side flip-btn" aria-label="Ganti kamera depan atau belakang">↻</button>
         </div>
       </div>
     </section>
@@ -61,22 +69,37 @@
       <div class="sheet-card">
         <div class="sheet-handle"></div>
         <div class="sheet-title-row">
-          <h2>Employee details</h2>
-          <button id="closeSettings" class="text-btn">Done</button>
+          <h2>Data pegawai</h2>
+          <button id="closeSettings" class="text-btn">Selesai</button>
         </div>
-        <label>Employee ID<input id="employeeId" autocomplete="off" placeholder="EMP-001" /></label>
-        <label>Employee name<input id="employeeName" autocomplete="name" placeholder="Your name" /></label>
-        <label>Work site<input id="siteName" autocomplete="organization" placeholder="Main Office" /></label>
-        <p class="helper">These details stay on this device. The camera pauses while this sheet is open so typing remains responsive.</p>
+        <label>ID Pegawai<input id="employeeId" autocomplete="off" placeholder="EMP-001" /></label>
+        <label>Nama Pegawai<input id="employeeName" autocomplete="name" placeholder="Nama lengkap" /></label>
+        <label>OPD / Company<input id="opdName" autocomplete="organization" placeholder="Nama OPD / Perusahaan" /></label>
+
+        <fieldset class="location-fieldset">
+          <legend>Nama lokasi</legend>
+          <div class="choice-row">
+            <label class="choice-pill"><input id="locationModeLive" type="radio" name="locationMode" value="live" checked /><span>Live Location</span></label>
+            <label class="choice-pill"><input id="locationModeManual" type="radio" name="locationMode" value="manual" /><span>Manual</span></label>
+          </div>
+          <div id="liveLocationBox" class="location-box">
+            <span class="location-box-label">Lokasi terdeteksi</span>
+            <strong id="liveLocationText">Menunggu GPS…</strong>
+          </div>
+          <label id="manualLocationWrap" class="manual-location hidden">Nama lokasi manual
+            <input id="manualLocationName" autocomplete="off" placeholder="Contoh: Kantor Dinas Utama" />
+          </label>
+        </fieldset>
+        <p class="helper">Live Location mengambil nama area dari posisi GPS. Jika gagal mendapatkan nama area, koordinat tetap digunakan. Kamera dijeda saat panel ini terbuka agar pengetikan tetap responsif.</p>
       </div>
     </aside>
 
     <aside id="previewPanel" class="sheet-panel preview-panel" aria-hidden="true">
       <div class="preview-card">
-        <img id="previewImage" alt="Captured attendance photo" />
+        <img id="previewImage" alt="Foto absensi" />
         <div class="preview-actions">
-          <button id="retakeBtn" class="secondary-btn">Retake</button>
-          <button id="submitBtn" class="primary-btn">Submit attendance</button>
+          <button id="retakeBtn" class="secondary-btn">Ulangi</button>
+          <button id="submitBtn" class="primary-btn">Kirim Absensi</button>
         </div>
         <p id="submitStatus" class="submit-status"></p>
       </div>
@@ -86,8 +109,8 @@
       <div class="sheet-card history-card">
         <div class="sheet-handle"></div>
         <div class="sheet-title-row">
-          <h2>Recent on this phone</h2>
-          <button id="closeHistory" class="text-btn">Done</button>
+          <h2>Riwayat di HP ini</h2>
+          <button id="closeHistory" class="text-btn">Selesai</button>
         </div>
         <div id="historyList" class="history-list"></div>
       </div>
