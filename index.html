@@ -3,54 +3,57 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0b0d10" />
+  <meta name="theme-color" content="#000000" />
   <title>CheckCam Attendance</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <main class="app-shell">
-    <section class="camera-stage">
+    <section id="cameraStage" class="camera-stage">
       <video id="camera" playsinline autoplay muted></video>
       <canvas id="captureCanvas" hidden></canvas>
+      <div id="captureFlash" class="capture-flash" aria-hidden="true"></div>
 
       <div class="topbar">
-        <button id="settingsBtn" class="icon-btn" aria-label="Employee settings">☰</button>
-        <div class="brand-pill">CHECKCAM</div>
-        <div class="top-actions">
-          <button id="mirrorBtn" class="mirror-btn active" type="button" aria-pressed="true" aria-label="Toggle mirror mode">MIRROR ON</button>
-          <button id="flipBtn" class="icon-btn" aria-label="Switch camera">↻</button>
+        <button id="settingsBtn" class="round-btn" aria-label="Employee details">☰</button>
+        <div class="brand-wrap">
+          <span class="brand">CHECKCAM</span>
+          <span id="cameraLabel" class="camera-label">FRONT</span>
         </div>
+        <button id="mirrorBtn" class="mirror-btn active" type="button" aria-pressed="true" aria-label="Toggle mirror mode">
+          <span class="mirror-icon">⇆</span><span id="mirrorLabel">MIRROR</span>
+        </button>
       </div>
 
       <div id="permissionCard" class="permission-card">
         <div class="permission-icon">📷</div>
         <h1>Camera check-in</h1>
-        <p>Allow camera and location so your attendance photo includes the time and GPS position.</p>
+        <p>Allow camera and location. The final photo uses the same framing and mirror view you see here.</p>
         <button id="startBtn" class="primary-btn">Allow camera & location</button>
       </div>
 
       <div id="stamp" class="stamp">
-        <div class="stamp-head">
+        <div class="stamp-topline">
           <span id="actionBadge" class="action-badge in">CLOCK IN</span>
           <span id="gpsBadge" class="gps-badge">GPS…</span>
         </div>
         <div id="clock" class="stamp-time">--:--:--</div>
         <div id="date" class="stamp-date">---</div>
-        <div class="stamp-rule"></div>
-        <div class="stamp-row"><span>Employee</span><strong id="stampEmployee">Not set</strong></div>
-        <div class="stamp-row"><span>Site</span><strong id="stampSite">Work Site</strong></div>
-        <div class="stamp-row"><span>Location</span><strong id="stampLocation">Waiting for GPS</strong></div>
+        <div class="stamp-divider"></div>
+        <div class="stamp-person"><strong id="stampEmployee">Not set</strong><span> • </span><span id="stampSite">Work Site</span></div>
+        <div id="stampLocation" class="stamp-location">Waiting for GPS</div>
       </div>
 
-      <div class="bottom-controls">
-        <div class="mode-switch" role="group" aria-label="Attendance action">
+      <div class="camera-controls">
+        <div class="mode-strip" role="group" aria-label="Attendance action">
           <button id="inBtn" class="mode active">IN</button>
           <button id="outBtn" class="mode">OUT</button>
         </div>
-        <button id="shutterBtn" class="shutter" aria-label="Take attendance photo" disabled>
-          <span></span>
-        </button>
-        <button id="historyBtn" class="mini-btn" aria-label="Recent records">▤</button>
+        <div class="shutter-row">
+          <button id="historyBtn" class="round-btn control-side" aria-label="Recent records">▤</button>
+          <button id="shutterBtn" class="shutter" aria-label="Take attendance photo" disabled><span></span></button>
+          <button id="flipBtn" class="round-btn control-side flip-btn" aria-label="Switch front or rear camera">↻</button>
+        </div>
       </div>
     </section>
 
@@ -64,7 +67,7 @@
         <label>Employee ID<input id="employeeId" autocomplete="off" placeholder="EMP-001" /></label>
         <label>Employee name<input id="employeeName" autocomplete="name" placeholder="Your name" /></label>
         <label>Work site<input id="siteName" autocomplete="organization" placeholder="Main Office" /></label>
-        <p class="helper">Details are saved on this device when you tap Done. Mirror mode controls both the live preview and the saved photo so they always match.</p>
+        <p class="helper">These details stay on this device. The camera pauses while this sheet is open so typing remains responsive.</p>
       </div>
     </aside>
 

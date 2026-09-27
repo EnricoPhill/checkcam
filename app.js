@@ -1,24 +1,30 @@
 const CONFIG = {
-  // Deploy Code.gs as a Google Apps Script Web App, then paste its /exec URL here.
+  // Paste your existing Google Apps Script Web App /exec URL here.
   endpoint: 'https://script.google.com/macros/s/AKfycbxKwZ4r1ETnjoNCQbgl5XbJupEFbhXoT2RnWz1sOhZGrhfYg3HCCZIAHFvVOtrVvtnZJg/exec',
   photoMaxWidth: 1280,
-  jpegQuality: 0.78
+  photoMaxHeight: 1920,
+  jpegQuality: 0.80
 };
 
 const $ = (id) => document.getElementById(id);
+const cameraStage = $('cameraStage');
 const camera = $('camera');
 const canvas = $('captureCanvas');
+const captureFlash = $('captureFlash');
 const permissionCard = $('permissionCard');
 const startBtn = $('startBtn');
 const shutterBtn = $('shutterBtn');
 const flipBtn = $('flipBtn');
 const mirrorBtn = $('mirrorBtn');
+const mirrorLabel = $('mirrorLabel');
+const cameraLabel = $('cameraLabel');
 const settingsBtn = $('settingsBtn');
 const settingsPanel = $('settingsPanel');
 const closeSettings = $('closeSettings');
 const employeeId = $('employeeId');
 const employeeName = $('employeeName');
 const siteName = $('siteName');
+const stamp = $('stamp');
 const stampEmployee = $('stampEmployee');
 const stampSite = $('stampSite');
 const stampLocation = $('stampLocation');
@@ -39,11 +45,21 @@ const closeHistory = $('closeHistory');
 const historyList = $('historyList');
 
 let stream = null;
-let facingMode = 'user';
+let facingMode = localStorage.getItem('checkcam.cameraFacing') === 'environment' ? 'environment' : 'user';
 let action = 'IN';
 let position = null;
 let captured = null;
-let mirrorEnabled = localStorage.getItem('checkcam.mirror') !== 'false';
+let mirrorEnabled = getSavedMirrorForFacing(facingMode);
+
+function mirrorStorageKey(mode) {
+  return mode === 'user' ? 'checkcam.mirror.front' : 'checkcam.mirror.back';
+}
+
+function getSavedMirrorForFacing(mode) {
+  const stored = localStorage.getItem(mirrorStorageKey(mode));
+  if (stored === null) return mode === 'user'; // normal selfie behavior by default
+  return stored === 'true';
+}
 
 function loadProfile() {
   const p = JSON.parse(localStorage.getItem('checkcam.profile') || '{}');
@@ -51,7 +67,7 @@ function loadProfile() {
   employeeName.value = p.employeeName || '';
   siteName.value = p.siteName || 'Main Office';
   refreshStamp();
-  applyMirrorState();
+  applyCameraUiState();
 }
 
 function saveProfile() {
@@ -66,8 +82,7 @@ function saveProfile() {
 function openSettings() {
   settingsPanel.classList.add('open');
   settingsPanel.setAttribute('aria-hidden', 'false');
-  // Pausing only the video element keeps camera permission/stream alive but
-  // avoids continuously painting the camera under the mobile keyboard.
+  // Pause display while the mobile keyboard is open. The camera permission stays active.
   if (stream && !camera.paused) camera.pause();
 }
 
@@ -85,21 +100,20 @@ function refreshStamp() {
   stampSite.textContent = siteName.value.trim() || 'Work Site';
 }
 
-function applyMirrorState() {
+function applyCameraUiState() {
   camera.classList.toggle('mirrored', mirrorEnabled);
   mirrorBtn.classList.toggle('active', mirrorEnabled);
   mirrorBtn.setAttribute('aria-pressed', String(mirrorEnabled));
-  mirrorBtn.textContent = mirrorEnabled ? 'MIRROR ON' : 'MIRROR OFF';
+  mirrorLabel.textContent = mirrorEnabled ? 'MIRROR ON' : 'MIRROR OFF';
+  cameraLabel.textContent = facingMode === 'user' ? 'FRONT' : 'BACK';
 }
 
 function toggleMirror() {
   mirrorEnabled = !mirrorEnabled;
-  localStorage.setItem('checkcam.mirror', String(mirrorEnabled));
-  applyMirrorState();
+  localStorage.setItem(mirrorStorageKey(facingMode), String(mirrorEnabled));
+  applyCameraUiState();
 }
 
-// Reuse formatters instead of rebuilding Intl objects twice every half-second.
-// This keeps the UI lighter while the keyboard and camera are active.
 const clockFormatter = new Intl.DateTimeFormat(undefined, {
   hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
 });
@@ -132,13 +146,18 @@ async function startCamera() {
   if (stream) stream.getTracks().forEach((t) => t.stop());
   try {
     stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: facingMode }, width: { ideal: 1280 }, height: { ideal: 1600 } },
+      video: {
+        facingMode: { ideal: facingMode },
+        width: { ideal: 1920 },
+        height: { ideal: 2560 }
+      },
       audio: false
     });
     camera.srcObject = stream;
     await camera.play();
     permissionCard.classList.add('hidden');
     shutterBtn.disabled = false;
+    applyCameraUiState();
   } catch (err) {
     console.error(err);
     alert('Camera permission was not granted. Allow camera access in your browser settings and reload.');
@@ -171,10 +190,25 @@ async function beginPermissions() {
   await startCamera();
 }
 
-function fitSize(videoW, videoH, maxW) {
-  if (videoW <= maxW) return { width: videoW, height: videoH };
-  const ratio = maxW / videoW;
-  return { width: Math.round(videoW * ratio), height: Math.round(videoH * ratio) };
+function getVisibleCoverCrop(videoW, videoH, viewW, viewH) {
+  const videoAspect = videoW / videoH;
+  const viewAspect = viewW / viewH;
+  if (videoAspect > viewAspect) {
+    const sourceWidth = videoH * viewAspect;
+    return { sx: (videoW - sourceWidth) / 2, sy: 0, sw: sourceWidth, sh: videoH };
+  }
+  const sourceHeight = videoW / viewAspect;
+  return { sx: 0, sy: (videoH - sourceHeight) / 2, sw: videoW, sh: sourceHeight };
+}
+
+function getCaptureOutputSize(viewW, viewH) {
+  const maxW = CONFIG.photoMaxWidth || 1280;
+  const maxH = CONFIG.photoMaxHeight || 1920;
+  const scale = Math.min(maxW / viewW, maxH / viewH);
+  return {
+    width: Math.max(1, Math.round(viewW * scale)),
+    height: Math.max(1, Math.round(viewH * scale))
+  };
 }
 
 function roundedRect(ctx, x, y, w, h, r) {
@@ -188,67 +222,99 @@ function roundedRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
+function getStampCanvasRect(outputW, outputH) {
+  const stageRect = cameraStage.getBoundingClientRect();
+  const stampRect = stamp.getBoundingClientRect();
+  const scaleX = outputW / stageRect.width;
+  const scaleY = outputH / stageRect.height;
+  return {
+    x: (stampRect.left - stageRect.left) * scaleX,
+    y: (stampRect.top - stageRect.top) * scaleY,
+    w: stampRect.width * scaleX,
+    h: stampRect.height * scaleY
+  };
+}
+
+function fitText(ctx, text, maxWidth) {
+  if (ctx.measureText(text).width <= maxWidth) return text;
+  let t = text;
+  while (t.length > 2 && ctx.measureText(`${t}…`).width > maxWidth) t = t.slice(0, -1);
+  return `${t}…`;
+}
+
 function drawStamp(ctx, width, height, capturedAt) {
-  // Compact stamp: about 25% of the image width instead of the old ~39%.
-  const pad = Math.round(width * 0.026);
-  const boxH = Math.round(width * 0.25);
-  const x = pad, y = height - boxH - pad, w = width - pad * 2;
+  // Use the live stamp's actual screen rectangle so the saved watermark stays
+  // in almost exactly the same place and size as the preview.
+  const r = getStampCanvasRect(width, height);
+  const unit = Math.max(1, r.w / 330);
+  const pad = 10 * unit;
+  const radius = 12 * unit;
 
   ctx.save();
-  ctx.fillStyle = 'rgba(10, 13, 16, 0.76)';
-  roundedRect(ctx, x, y, w, boxH, Math.round(width * 0.018));
+  ctx.fillStyle = 'rgba(8, 11, 14, 0.72)';
+  roundedRect(ctx, r.x, r.y, r.w, r.h, radius);
   ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,.22)';
-  ctx.lineWidth = Math.max(1, width * .0016);
+  ctx.strokeStyle = 'rgba(255,255,255,.18)';
+  ctx.lineWidth = Math.max(1, 1 * unit);
   ctx.stroke();
 
-  const innerX = x + pad;
-  const innerW = w - pad * 2;
-  const badgeH = Math.round(width * 0.038);
-  const badgeW = Math.round(width * 0.145);
+  const left = r.x + pad;
+  const right = r.x + r.w - pad;
+  const badgeH = 20 * unit;
+  const badgeW = 67 * unit;
   ctx.fillStyle = action === 'IN' ? 'rgba(67,209,122,.96)' : 'rgba(255,90,103,.96)';
-  roundedRect(ctx, innerX, y + pad, badgeW, badgeH, badgeH / 2);
+  roundedRect(ctx, left, r.y + 9 * unit, badgeW, badgeH, badgeH / 2);
   ctx.fill();
-  ctx.fillStyle = '#07100b';
-  ctx.font = `800 ${Math.round(width * .018)}px system-ui`;
+  ctx.fillStyle = action === 'IN' ? '#07140c' : '#1c0507';
+  ctx.font = `900 ${8.5 * unit}px system-ui`;
   ctx.textBaseline = 'middle';
-  ctx.fillText(action === 'IN' ? 'CLOCK IN' : 'CLOCK OUT', innerX + Math.round(width*.012), y + pad + badgeH/2 + 1);
+  ctx.fillText(action === 'IN' ? 'CLOCK IN' : 'CLOCK OUT', left + 7 * unit, r.y + 19 * unit);
 
-  const timeText = clockFormatter.format(capturedAt);
-  const dateText = dateFormatter.format(capturedAt);
-  ctx.fillStyle = '#fff';
+  const gpsText = position ? `GPS ±${Math.round(position.coords.accuracy)}m` : 'GPS OFF';
+  ctx.font = `850 ${8.5 * unit}px system-ui`;
+  const gpsW = Math.max(50 * unit, ctx.measureText(gpsText).width + 14 * unit);
+  ctx.fillStyle = position ? 'rgba(67,209,122,.18)' : 'rgba(255,255,255,.12)';
+  roundedRect(ctx, right - gpsW, r.y + 9 * unit, gpsW, badgeH, badgeH / 2);
+  ctx.fill();
+  ctx.fillStyle = position ? '#d5ffe3' : '#fff';
+  ctx.fillText(gpsText, right - gpsW + 7 * unit, r.y + 19 * unit);
+
   ctx.textBaseline = 'alphabetic';
-  ctx.font = `900 ${Math.round(width * .052)}px system-ui`;
-  ctx.fillText(timeText, innerX, y + Math.round(boxH*.40));
-  ctx.font = `650 ${Math.round(width * .021)}px system-ui`;
-  ctx.fillStyle = '#e6e9ee';
-  ctx.fillText(dateText, innerX, y + Math.round(boxH*.51));
+  ctx.fillStyle = '#fff';
+  ctx.font = `900 ${32 * unit}px system-ui`;
+  ctx.fillText(clockFormatter.format(capturedAt), left, r.y + 58 * unit);
+  ctx.fillStyle = '#e7eaee';
+  ctx.font = `700 ${10.5 * unit}px system-ui`;
+  ctx.fillText(dateFormatter.format(capturedAt), left, r.y + 73 * unit);
 
-  ctx.strokeStyle = 'rgba(255,255,255,.20)';
+  ctx.strokeStyle = 'rgba(255,255,255,.17)';
+  ctx.lineWidth = Math.max(1, .8 * unit);
   ctx.beginPath();
-  ctx.moveTo(innerX, y + Math.round(boxH*.57));
-  ctx.lineTo(innerX + innerW, y + Math.round(boxH*.57));
+  ctx.moveTo(left, r.y + 81 * unit);
+  ctx.lineTo(right, r.y + 81 * unit);
   ctx.stroke();
 
-  const labelX = innerX;
-  const valueX = innerX + Math.round(width * .13);
-  const rows = [
-    ['Employee', employeeName.value.trim() || employeeId.value.trim() || 'Not set'],
-    ['Site', siteName.value.trim() || 'Work Site'],
-    ['Location', position ? `${position.coords.latitude.toFixed(5)}, ${position.coords.longitude.toFixed(5)}` : 'GPS unavailable']
-  ];
-  rows.forEach((row, i) => {
-    const yy = y + Math.round(boxH*(.68 + i*.095));
-    ctx.font = `500 ${Math.round(width * .0175)}px system-ui`;
-    ctx.fillStyle = '#b8bec8';
-    ctx.fillText(row[0], labelX, yy);
-    ctx.font = `750 ${Math.round(width * .0175)}px system-ui`;
-    ctx.fillStyle = '#fff';
-    const text = row[1].length > 48 ? row[1].slice(0, 45) + '…' : row[1];
-    ctx.fillText(text, valueX, yy);
-  });
+  const name = employeeName.value.trim() || employeeId.value.trim() || 'Not set';
+  const site = siteName.value.trim() || 'Work Site';
+  ctx.fillStyle = '#fff';
+  ctx.font = `800 ${10.5 * unit}px system-ui`;
+  ctx.fillText(fitText(ctx, `${name}  •  ${site}`, right - left), left, r.y + 96 * unit);
+
+  const locationText = position
+    ? `${position.coords.latitude.toFixed(5)}, ${position.coords.longitude.toFixed(5)}`
+    : 'Location unavailable';
+  ctx.fillStyle = '#c2c8d0';
+  ctx.font = `600 ${9.5 * unit}px system-ui`;
+  ctx.fillText(fitText(ctx, locationText, right - left), left, r.y + 110 * unit);
   ctx.restore();
 }
+
+function flashShutter() {
+  captureFlash.classList.remove('flash');
+  void captureFlash.offsetWidth;
+  captureFlash.classList.add('flash');
+}
+
 function capturePhoto() {
   if (!camera.videoWidth || !camera.videoHeight) return;
   if (!employeeId.value.trim() || !employeeName.value.trim()) {
@@ -257,24 +323,29 @@ function capturePhoto() {
   }
 
   const capturedAt = new Date();
-  const size = fitSize(camera.videoWidth, camera.videoHeight, CONFIG.photoMaxWidth);
+  const stageRect = cameraStage.getBoundingClientRect();
+  const viewW = Math.max(1, stageRect.width);
+  const viewH = Math.max(1, stageRect.height);
+  const crop = getVisibleCoverCrop(camera.videoWidth, camera.videoHeight, viewW, viewH);
+  const size = getCaptureOutputSize(viewW, viewH);
+
   canvas.width = size.width;
   canvas.height = size.height;
   const ctx = canvas.getContext('2d');
 
-  // Mirror the saved image only when Mirror mode is enabled.
-  // The same setting is applied to the live preview, so preview and result match.
   if (mirrorEnabled) {
     ctx.save();
     ctx.translate(canvas.width, 0);
     ctx.scale(-1, 1);
-    ctx.drawImage(camera, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(camera, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, canvas.width, canvas.height);
     ctx.restore();
   } else {
-    ctx.drawImage(camera, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(camera, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, canvas.width, canvas.height);
   }
 
   drawStamp(ctx, canvas.width, canvas.height, capturedAt);
+  flashShutter();
+
   const photoData = canvas.toDataURL('image/jpeg', CONFIG.jpegQuality);
   captured = {
     photoData,
@@ -286,6 +357,8 @@ function capturePhoto() {
     latitude: position?.coords?.latitude ?? '',
     longitude: position?.coords?.longitude ?? '',
     accuracy: position?.coords?.accuracy ?? '',
+    cameraFacing: facingMode,
+    mirrored: mirrorEnabled,
     userAgent: navigator.userAgent
   };
   previewImage.src = photoData;
@@ -327,9 +400,6 @@ async function submitAttendance() {
   try {
     const body = new URLSearchParams();
     Object.entries(captured).forEach(([k, v]) => body.append(k, v));
-
-    // no-cors avoids browser CORS blocking with a simple Apps Script endpoint.
-    // The response is opaque, so the server timestamp in the Google Sheet is the source of truth.
     await fetch(CONFIG.endpoint, { method: 'POST', mode: 'no-cors', body });
     saveHistory({ ...record, submitted: true });
     submitStatus.textContent = 'Submitted. Check the Google Sheet for the server-recorded entry.';
@@ -362,6 +432,9 @@ function escapeHtml(s='') {
 startBtn.addEventListener('click', beginPermissions);
 flipBtn.addEventListener('click', async () => {
   facingMode = facingMode === 'user' ? 'environment' : 'user';
+  localStorage.setItem('checkcam.cameraFacing', facingMode);
+  mirrorEnabled = getSavedMirrorForFacing(facingMode);
+  applyCameraUiState();
   await startCamera();
 });
 mirrorBtn.addEventListener('click', toggleMirror);
@@ -370,12 +443,18 @@ inBtn.addEventListener('click', () => setAction('IN'));
 outBtn.addEventListener('click', () => setAction('OUT'));
 settingsBtn.addEventListener('click', openSettings);
 closeSettings.addEventListener('click', closeSettingsPanel);
-// Do not redraw the camera stamp on every keystroke; update after a field is committed.
 [employeeId, employeeName, siteName].forEach((el) => el.addEventListener('change', refreshStamp));
 retakeBtn.addEventListener('click', closePreview);
 submitBtn.addEventListener('click', submitAttendance);
-historyBtn.addEventListener('click', () => { renderHistory(); historyPanel.classList.add('open'); historyPanel.setAttribute('aria-hidden','false'); });
-closeHistory.addEventListener('click', () => { historyPanel.classList.remove('open'); historyPanel.setAttribute('aria-hidden','true'); });
+historyBtn.addEventListener('click', () => {
+  renderHistory();
+  historyPanel.classList.add('open');
+  historyPanel.setAttribute('aria-hidden', 'false');
+});
+closeHistory.addEventListener('click', () => {
+  historyPanel.classList.remove('open');
+  historyPanel.setAttribute('aria-hidden', 'true');
+});
 
 loadProfile();
 setAction('IN');
