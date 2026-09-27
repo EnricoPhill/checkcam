@@ -41,25 +41,25 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .primary-btn { background: #fff; color: #0c0f13; }
 .secondary-btn { background: #292d34; color: #fff; }
 
-/* v8 overlay: larger, balanced, and still anchored bottom-left of the real video frame. */
-.stamp { position: absolute; z-index: 5; left: 12px; top: auto; width: min(80vw, 340px); max-width: min(80vw, 340px); padding: 11px 12px; border-radius: 14px; background: rgba(8,11,14,.70); border: 1px solid rgba(255,255,255,.17); box-shadow: 0 8px 26px rgba(0,0,0,.24); text-shadow: 0 1px 2px rgba(0,0,0,.72); }
-.stamp-header { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 12px; align-items: start; }
-.stamp-primary { min-width: 0; }
-.stamp-side { display: grid; justify-items: end; align-content: start; gap: 7px; min-width: 66px; }
-.action-badge, .accuracy-badge { display: inline-flex; align-items: center; min-height: 20px; padding: 3px 7px; border-radius: 999px; font-size: 8.5px; line-height: 1; font-weight: 900; letter-spacing: .035em; white-space: nowrap; }
+/* v8.1 overlay: transparent, compact, and anchored bottom-left of the real video frame. */
+.stamp { position: absolute; z-index: 5; left: 12px; top: auto; width: min(74vw, 300px); max-width: min(74vw, 300px); padding: 4px 2px; background: transparent; border: 0; box-shadow: none; text-shadow: 0 2px 4px rgba(0,0,0,.92), 0 0 2px rgba(0,0,0,.88); }
+.stamp-topline { display: flex; align-items: center; justify-content: flex-start; gap: 6px; min-width: 0; }
+.stamp-time-row { display: flex; align-items: center; justify-content: flex-start; gap: 10px; margin-top: 5px; min-width: 0; }
+.stamp-clock-block { min-width: 0; }
+.action-badge, .accuracy-badge { display: inline-flex; align-items: center; min-height: 20px; padding: 3px 7px; border-radius: 999px; font-size: 8.5px; line-height: 1; font-weight: 900; letter-spacing: .035em; white-space: nowrap; text-shadow: none; }
 .action-badge.in { background: rgba(67,209,122,.94); color: #07140c; }
 .action-badge.out { background: rgba(255,90,103,.94); color: #1c0507; }
-.accuracy-badge { background: rgba(255,255,255,.12); color: #fff; }
-.accuracy-badge.ok { background: rgba(67,209,122,.17); color: #d5ffe3; }
-.stamp-time { margin-top: 5px; font-size: clamp(30px, 7.8vw, 39px); font-weight: 900; letter-spacing: -.045em; line-height: .96; }
-.stamp-date { margin-top: 3px; color: #e7eaee; font-size: 10.5px; font-weight: 700; }
-.stamp-logo-box { width: 56px; height: 56px; padding: 4px; border-radius: 10px; display: grid; place-items: center; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.13); overflow: hidden; }
-.stamp-logo-box img { display: block; width: 100%; height: 100%; object-fit: contain; }
-.stamp-divider { height: 1px; margin: 8px 0 7px; background: rgba(255,255,255,.17); }
-.stamp-line { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 316px; font-size: 11px; line-height: 1.34; }
-.stamp-line.muted { color: #d1d5da; margin-top: 2px; }
-.stamp-line.subtle { color: #aeb5be; margin-top: 2px; font-size: 10px; }
-.stamp-line.work { margin-top: 5px; color: #f4f6f8; font-size: 10.5px; }
+.accuracy-badge { background: rgba(10,12,15,.48); color: #fff; border: 1px solid rgba(255,255,255,.13); }
+.accuracy-badge.ok { background: rgba(26,86,49,.60); color: #e3ffec; }
+.stamp-time { font-size: clamp(31px, 8vw, 40px); font-weight: 900; letter-spacing: -.045em; line-height: .96; white-space: nowrap; }
+.stamp-date { margin-top: 3px; color: #f1f3f5; font-size: 10.8px; font-weight: 750; white-space: nowrap; }
+.stamp-logo-box { width: 52px; height: 52px; padding: 2px; display: grid; place-items: center; background: transparent; border: 0; overflow: hidden; flex: 0 0 auto; }
+.stamp-logo-box img { display: block; width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 2px 3px rgba(0,0,0,.72)); }
+.stamp-divider { width: 100%; height: 1px; margin: 7px 0 6px; background: rgba(255,255,255,.36); box-shadow: 0 1px 2px rgba(0,0,0,.55); }
+.stamp-line { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; font-size: 11.2px; line-height: 1.34; }
+.stamp-line.muted { color: #f0f2f4; margin-top: 2px; }
+.stamp-line.subtle { color: #e3e7eb; margin-top: 2px; font-size: 10.2px; }
+.stamp-line.work { margin-top: 5px; color: #fff; font-size: 10.7px; }
 
 .camera-controls { position: absolute; z-index: 7; left: 0; right: 0; bottom: 0; padding: 8px 20px calc(env(safe-area-inset-bottom) + 14px); background: linear-gradient(to top, rgba(0,0,0,.82), rgba(0,0,0,.32), transparent); }
 .mode-strip { height: 32px; display: flex; justify-content: center; gap: 6px; margin: 0 auto 6px; }

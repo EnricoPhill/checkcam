@@ -1,4 +1,4 @@
-const CACHE_NAME = 'checkcam-v8-shell-1';
+const CACHE_NAME = 'checkcam-v8-1-shell-1';
 const APP_SHELL = ['./', './index.html', './styles.css', './app.js', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 const DB_NAME = 'checkcam-db';
 const DB_VERSION = 1;

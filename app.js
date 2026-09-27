@@ -524,7 +524,8 @@ function positionStampInsideVideo() {
   const pad = Math.max(10, Math.min(14, videoRect.width * 0.03));
   stamp.style.left = `${videoRect.left - stageRect.left + pad}px`;
   stamp.style.right = 'auto';
-  const stampW = Math.min(340, Math.max(250, videoRect.width * 0.80));
+  const maxAvailable = Math.max(1, videoRect.width - pad * 2);
+  const stampW = Math.min(maxAvailable, Math.min(300, Math.max(236, videoRect.width * 0.72)));
   stamp.style.width = `${stampW}px`;
   stamp.style.maxWidth = `${stampW}px`;
   stamp.style.bottom = 'auto';
@@ -548,8 +549,9 @@ function roundedRect(ctx, x, y, w, h, r) {
 function getStampLayoutUnits() {
   const logo = hasOverlayLogo();
   const location = Boolean(getResolvedLocationName());
-  const headerBottom = logo ? 88 : 76;
-  const nameY = headerBottom + 17;
+  // Top row contains ABSEN + Accuracy. Logo sits beside the time/date block.
+  const dividerY = logo ? 91 : 78;
+  const nameY = dividerY + 16;
   const opdY = nameY + 15;
   const locationY = location ? opdY + 15 : null;
   const coordY = location ? locationY + 14 : opdY + 14;
@@ -557,13 +559,13 @@ function getStampLayoutUnits() {
   return {
     logo,
     location,
-    headerBottom,
+    dividerY,
     nameY,
     opdY,
     locationY,
     coordY,
     workY,
-    height: workY + 12
+    height: workY + 10
   };
 }
 
@@ -609,78 +611,79 @@ function drawContainedImage(ctx, img, x, y, w, h) {
 function drawStamp(ctx, width, height, capturedAt, durationMs) {
   const r = getStampCanvasRect(width, height);
   const layout = r.layout || getStampLayoutUnits();
-  const unit = Math.max(1, r.w / 320);
-  const pad = 12 * unit;
-  const radius = 14 * unit;
-  const left = r.x + pad;
-  const right = r.x + r.w - pad;
+  const unit = Math.max(1, r.w / 300);
+  const left = r.x + 2 * unit;
+  const right = r.x + r.w - 2 * unit;
 
   ctx.save();
-  ctx.fillStyle = 'rgba(8, 11, 14, 0.74)';
-  roundedRect(ctx, r.x, r.y, r.w, r.h, radius);
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,.18)';
-  ctx.lineWidth = Math.max(1, unit);
-  ctx.stroke();
+  // v8.1: no bounding-box fill or border; only the text/logo/badges are drawn.
+  ctx.shadowColor = 'rgba(0,0,0,.86)';
+  ctx.shadowBlur = 3 * unit;
+  ctx.shadowOffsetY = 1.2 * unit;
 
   const badgeH = 20 * unit;
   ctx.textBaseline = 'middle';
   ctx.font = `900 ${8.5 * unit}px system-ui`;
   const actionText = action === 'IN' ? 'ABSEN MASUK' : 'ABSEN PULANG';
   const actionW = ctx.measureText(actionText).width + 14 * unit;
+  ctx.shadowColor = 'transparent';
   ctx.fillStyle = action === 'IN' ? 'rgba(67,209,122,.96)' : 'rgba(255,90,103,.96)';
-  roundedRect(ctx, left, r.y + 11 * unit, actionW, badgeH, badgeH / 2);
+  roundedRect(ctx, left, r.y + 4 * unit, actionW, badgeH, badgeH / 2);
   ctx.fill();
   ctx.fillStyle = action === 'IN' ? '#07140c' : '#1c0507';
-  ctx.fillText(actionText, left + 7 * unit, r.y + 21 * unit);
+  ctx.fillText(actionText, left + 7 * unit, r.y + 14 * unit);
 
   const accText = accuracyText();
   ctx.font = `850 ${8.5 * unit}px system-ui`;
-  const accW = Math.min(104 * unit, ctx.measureText(accText).width + 14 * unit);
-  const accX = right - accW;
-  ctx.fillStyle = position ? 'rgba(67,209,122,.18)' : 'rgba(255,255,255,.12)';
-  roundedRect(ctx, accX, r.y + 11 * unit, accW, badgeH, badgeH / 2);
+  const availableForAcc = Math.max(56 * unit, right - (left + actionW + 6 * unit));
+  const accW = Math.min(availableForAcc, ctx.measureText(accText).width + 14 * unit);
+  const accX = left + actionW + 6 * unit;
+  ctx.fillStyle = position ? 'rgba(26,86,49,.66)' : 'rgba(10,12,15,.52)';
+  roundedRect(ctx, accX, r.y + 4 * unit, accW, badgeH, badgeH / 2);
   ctx.fill();
-  ctx.fillStyle = position ? '#d5ffe3' : '#fff';
-  ctx.fillText(fitText(ctx, accText, accW - 10 * unit), accX + 5 * unit, r.y + 21 * unit);
+  ctx.fillStyle = position ? '#e3ffec' : '#fff';
+  ctx.fillText(fitText(ctx, accText, accW - 10 * unit), accX + 5 * unit, r.y + 14 * unit);
 
+  ctx.shadowColor = 'rgba(0,0,0,.88)';
+  ctx.shadowBlur = 3.5 * unit;
+  ctx.shadowOffsetY = 1.5 * unit;
   ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = '#fff';
-  ctx.font = `900 ${34 * unit}px system-ui`;
-  ctx.fillText(clockFormatter.format(capturedAt), left, r.y + 58 * unit);
-  ctx.fillStyle = '#e7eaee';
-  ctx.font = `700 ${10.5 * unit}px system-ui`;
-  ctx.fillText(dateFormatter.format(capturedAt), left, r.y + 73 * unit);
+  ctx.font = `900 ${35 * unit}px system-ui`;
+
+  const logoSize = layout.logo ? 52 * unit : 0;
+  const logoGap = layout.logo ? 10 * unit : 0;
+  const timeMax = Math.max(80 * unit, right - left - logoSize - logoGap);
+  ctx.fillText(fitText(ctx, clockFormatter.format(capturedAt), timeMax), left, r.y + 57 * unit);
+  ctx.fillStyle = '#f1f3f5';
+  ctx.font = `750 ${10.8 * unit}px system-ui`;
+  ctx.fillText(fitText(ctx, dateFormatter.format(capturedAt), timeMax), left, r.y + 73 * unit);
 
   if (layout.logo && hasOverlayLogo()) {
-    const logoW = 56 * unit;
-    const logoH = 56 * unit;
-    const logoX = right - logoW;
-    const logoY = r.y + 30 * unit;
-    ctx.fillStyle = 'rgba(255,255,255,.08)';
-    roundedRect(ctx, logoX, logoY, logoW, logoH, 10 * unit);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,.13)';
-    ctx.lineWidth = Math.max(1, .8 * unit);
-    ctx.stroke();
-    drawContainedImage(ctx, stampLogo, logoX + 4 * unit, logoY + 4 * unit, logoW - 8 * unit, logoH - 8 * unit);
+    const logoX = left + timeMax + logoGap;
+    const logoY = r.y + 31 * unit;
+    ctx.shadowColor = 'rgba(0,0,0,.60)';
+    ctx.shadowBlur = 3 * unit;
+    drawContainedImage(ctx, stampLogo, logoX, logoY, logoSize, logoSize);
   }
 
-  ctx.strokeStyle = 'rgba(255,255,255,.17)';
+  ctx.shadowColor = 'rgba(0,0,0,.72)';
+  ctx.shadowBlur = 2.5 * unit;
+  ctx.strokeStyle = 'rgba(255,255,255,.38)';
   ctx.lineWidth = Math.max(1, .8 * unit);
   ctx.beginPath();
-  ctx.moveTo(left, r.y + layout.headerBottom * unit);
-  ctx.lineTo(right, r.y + layout.headerBottom * unit);
+  ctx.moveTo(left, r.y + layout.dividerY * unit);
+  ctx.lineTo(right, r.y + layout.dividerY * unit);
   ctx.stroke();
 
   const maxText = right - left;
   ctx.fillStyle = '#fff';
-  ctx.font = `800 ${11 * unit}px system-ui`;
+  ctx.font = `800 ${11.2 * unit}px system-ui`;
   const name = employeeName.value.trim() || 'Belum diatur';
   ctx.fillText(fitText(ctx, name, maxText), left, r.y + layout.nameY * unit);
 
-  ctx.fillStyle = '#d1d5da';
-  ctx.font = `650 ${10.2 * unit}px system-ui`;
+  ctx.fillStyle = '#f0f2f4';
+  ctx.font = `650 ${10.3 * unit}px system-ui`;
   ctx.fillText(fitText(ctx, `OPD: ${opdName.value.trim() || 'Belum diatur'}`, maxText), left, r.y + layout.opdY * unit);
 
   const locationName = getResolvedLocationName();
@@ -689,12 +692,12 @@ function drawStamp(ctx, width, height, capturedAt, durationMs) {
   }
 
   const coordText = position ? `${position.coords.latitude.toFixed(5)}, ${position.coords.longitude.toFixed(5)}` : 'Koordinat belum tersedia';
-  ctx.fillStyle = '#aeb5be';
-  ctx.font = `600 ${9.5 * unit}px system-ui`;
+  ctx.fillStyle = '#e3e7eb';
+  ctx.font = `600 ${9.7 * unit}px system-ui`;
   ctx.fillText(fitText(ctx, coordText, maxText), left, r.y + layout.coordY * unit);
 
-  ctx.fillStyle = '#f4f6f8';
-  ctx.font = `750 ${10 * unit}px system-ui`;
+  ctx.fillStyle = '#fff';
+  ctx.font = `750 ${10.2 * unit}px system-ui`;
   ctx.fillText(fitText(ctx, `Waktu Kerja: ${action === 'IN' ? '00:00' : formatDuration(durationMs)}`, maxText), left, r.y + layout.workY * unit);
   ctx.restore();
 }

@@ -44,17 +44,17 @@
       </div>
 
       <div id="stamp" class="stamp">
-        <div class="stamp-header">
-          <div class="stamp-primary">
-            <span id="actionBadge" class="action-badge in">ABSEN MASUK</span>
+        <div class="stamp-topline">
+          <span id="actionBadge" class="action-badge in">ABSEN MASUK</span>
+          <span id="accuracyBadge" class="accuracy-badge">Accuracy --</span>
+        </div>
+        <div class="stamp-time-row">
+          <div class="stamp-clock-block">
             <div id="clock" class="stamp-time">--:--</div>
             <div id="date" class="stamp-date">---</div>
           </div>
-          <div class="stamp-side">
-            <span id="accuracyBadge" class="accuracy-badge">Accuracy --</span>
-            <div id="stampLogoBox" class="stamp-logo-box hidden">
-              <img id="stampLogo" alt="Logo overlay" />
-            </div>
+          <div id="stampLogoBox" class="stamp-logo-box hidden">
+            <img id="stampLogo" alt="Logo overlay" />
           </div>
         </div>
         <div class="stamp-divider"></div>
@@ -98,7 +98,7 @@
             </div>
             <div class="logo-actions">
               <label class="logo-file-btn">Pilih / Ganti Logo
-                <input id="logoInput" type="file" accept="image/png,image/jpeg,image/webp" />
+                <input id="logoInput" type="file" accept="image/*" />
               </label>
               <button id="removeLogoBtn" class="logo-remove-btn" type="button">Hapus Logo</button>
             </div>
