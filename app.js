@@ -309,8 +309,8 @@ zoomSlider.addEventListener('input', () => {
 
 function accuracyText() {
   if (!position || !Number.isFinite(position.coords.accuracy)) return 'Accuracy --';
-  // Browser Geolocation accuracy is reported in meters. Convert it honestly to millimeters for display.
-  return `Accuracy ±${Math.round(position.coords.accuracy * 1000)}mm`;
+  // Browser Geolocation accuracy is reported in meters. Display it directly in meters.
+  return `Accuracy ±${Math.round(position.coords.accuracy)}m`;
 }
 
 function distanceMeters(a, b) {
@@ -457,11 +457,22 @@ function getStampCanvasRect(outputW, outputH) {
   const stampRect = stamp.getBoundingClientRect();
   const scaleX = outputW / videoRect.width;
   const scaleY = outputH / videoRect.height;
+
+  // Keep the saved-photo card compact and bottom-left anchored.
+  // Do not use the DOM element's height: browser layout can report extra
+  // vertical space that is not part of the visible card content.
+  const x = (stampRect.left - videoRect.left) * scaleX;
+  const w = stampRect.width * scaleX;
+  const unit = Math.max(1, w / 270);
+  const contentHeight = 146 * unit;
+  const bottomGap = Math.max(0, (videoRect.bottom - stampRect.bottom) * scaleY);
+  const y = Math.max(0, outputH - bottomGap - contentHeight);
+
   return {
-    x: (stampRect.left - videoRect.left) * scaleX,
-    y: (stampRect.top - videoRect.top) * scaleY,
-    w: stampRect.width * scaleX,
-    h: stampRect.height * scaleY
+    x: Math.max(0, x),
+    y,
+    w: Math.min(w, outputW - Math.max(0, x)),
+    h: Math.min(contentHeight, outputH - y)
   };
 }
 
