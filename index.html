@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0d10" />
+  <title>CheckCam Attendance</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <section class="camera-stage">
+      <video id="camera" playsinline autoplay muted></video>
+      <canvas id="captureCanvas" hidden></canvas>
+
+      <div class="topbar">
+        <button id="settingsBtn" class="icon-btn" aria-label="Employee settings">☰</button>
+        <div class="brand-pill">CHECKCAM</div>
+        <button id="flipBtn" class="icon-btn" aria-label="Switch camera">↻</button>
+      </div>
+
+      <div id="permissionCard" class="permission-card">
+        <div class="permission-icon">📷</div>
+        <h1>Camera check-in</h1>
+        <p>Allow camera and location so your attendance photo includes the time and GPS position.</p>
+        <button id="startBtn" class="primary-btn">Allow camera & location</button>
+      </div>
+
+      <div id="stamp" class="stamp">
+        <div class="stamp-head">
+          <span id="actionBadge" class="action-badge in">CLOCK IN</span>
+          <span id="gpsBadge" class="gps-badge">GPS…</span>
+        </div>
+        <div id="clock" class="stamp-time">--:--:--</div>
+        <div id="date" class="stamp-date">---</div>
+        <div class="stamp-rule"></div>
+        <div class="stamp-row"><span>Employee</span><strong id="stampEmployee">Not set</strong></div>
+        <div class="stamp-row"><span>Site</span><strong id="stampSite">Work Site</strong></div>
+        <div class="stamp-row"><span>Location</span><strong id="stampLocation">Waiting for GPS</strong></div>
+      </div>
+
+      <div class="bottom-controls">
+        <div class="mode-switch" role="group" aria-label="Attendance action">
+          <button id="inBtn" class="mode active">IN</button>
+          <button id="outBtn" class="mode">OUT</button>
+        </div>
+        <button id="shutterBtn" class="shutter" aria-label="Take attendance photo" disabled>
+          <span></span>
+        </button>
+        <button id="historyBtn" class="mini-btn" aria-label="Recent records">▤</button>
+      </div>
+    </section>
+
+    <aside id="settingsPanel" class="sheet-panel" aria-hidden="true">
+      <div class="sheet-card">
+        <div class="sheet-handle"></div>
+        <div class="sheet-title-row">
+          <h2>Employee details</h2>
+          <button id="closeSettings" class="text-btn">Done</button>
+        </div>
+        <label>Employee ID<input id="employeeId" autocomplete="off" placeholder="EMP-001" /></label>
+        <label>Employee name<input id="employeeName" autocomplete="name" placeholder="Your name" /></label>
+        <label>Work site<input id="siteName" autocomplete="organization" placeholder="Main Office" /></label>
+        <p class="helper">Saved only on this device. Your Apps Script endpoint is configured in <code>app.js</code>.</p>
+      </div>
+    </aside>
+
+    <aside id="previewPanel" class="sheet-panel preview-panel" aria-hidden="true">
+      <div class="preview-card">
+        <img id="previewImage" alt="Captured attendance photo" />
+        <div class="preview-actions">
+          <button id="retakeBtn" class="secondary-btn">Retake</button>
+          <button id="submitBtn" class="primary-btn">Submit attendance</button>
+        </div>
+        <p id="submitStatus" class="submit-status"></p>
+      </div>
+    </aside>
+
+    <aside id="historyPanel" class="sheet-panel" aria-hidden="true">
+      <div class="sheet-card history-card">
+        <div class="sheet-handle"></div>
+        <div class="sheet-title-row">
+          <h2>Recent on this phone</h2>
+          <button id="closeHistory" class="text-btn">Done</button>
+        </div>
+        <div id="historyList" class="history-list"></div>
+      </div>
+    </aside>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
