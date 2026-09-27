@@ -145,19 +145,39 @@ async function startCamera() {
   }
   if (stream) stream.getTracks().forEach((t) => t.stop());
   try {
+    const videoConstraints = {
+      facingMode: { ideal: facingMode },
+      width: { ideal: 3840 },
+      height: { ideal: 2880 }
+    };
+    // Where supported, ask the browser not to crop/scale the camera stream for us.
+    if (navigator.mediaDevices.getSupportedConstraints?.().resizeMode) {
+      videoConstraints.resizeMode = 'none';
+    }
+
     stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: { ideal: facingMode },
-        width: { ideal: 1920 },
-        height: { ideal: 2560 }
-      },
+      video: videoConstraints,
       audio: false
     });
     camera.srcObject = stream;
     await camera.play();
+
+    // Some phones expose a camera zoom constraint even when the user never
+    // requested zoom. Force the track to its widest available field of view.
+    const track = stream.getVideoTracks()[0];
+    try {
+      const caps = track.getCapabilities?.();
+      if (caps?.zoom && Number.isFinite(caps.zoom.min)) {
+        await track.applyConstraints({ advanced: [{ zoom: caps.zoom.min }] });
+      }
+    } catch (zoomErr) {
+      console.warn('Could not reset camera zoom', zoomErr);
+    }
+
     permissionCard.classList.add('hidden');
     shutterBtn.disabled = false;
     applyCameraUiState();
+    requestAnimationFrame(positionStampInsideVideo);
   } catch (err) {
     console.error(err);
     alert('Camera permission was not granted. Allow camera access in your browser settings and reload.');
@@ -190,25 +210,67 @@ async function beginPermissions() {
   await startCamera();
 }
 
-function getVisibleCoverCrop(videoW, videoH, viewW, viewH) {
+function getVisibleVideoRect() {
+  const stageRect = cameraStage.getBoundingClientRect();
+  const videoW = camera.videoWidth || 1;
+  const videoH = camera.videoHeight || 1;
+  const stageW = Math.max(1, stageRect.width);
+  const stageH = Math.max(1, stageRect.height);
   const videoAspect = videoW / videoH;
-  const viewAspect = viewW / viewH;
-  if (videoAspect > viewAspect) {
-    const sourceWidth = videoH * viewAspect;
-    return { sx: (videoW - sourceWidth) / 2, sy: 0, sw: sourceWidth, sh: videoH };
+  const stageAspect = stageW / stageH;
+
+  let width, height, left, top;
+  if (videoAspect > stageAspect) {
+    width = stageW;
+    height = width / videoAspect;
+    left = 0;
+    top = (stageH - height) / 2;
+  } else {
+    height = stageH;
+    width = height * videoAspect;
+    top = 0;
+    left = (stageW - width) / 2;
   }
-  const sourceHeight = videoW / viewAspect;
-  return { sx: 0, sy: (videoH - sourceHeight) / 2, sw: videoW, sh: sourceHeight };
+
+  return {
+    left: stageRect.left + left,
+    top: stageRect.top + top,
+    width,
+    height,
+    right: stageRect.left + left + width,
+    bottom: stageRect.top + top + height
+  };
 }
 
-function getCaptureOutputSize(viewW, viewH) {
+function getCaptureOutputSize(videoW, videoH) {
   const maxW = CONFIG.photoMaxWidth || 1280;
   const maxH = CONFIG.photoMaxHeight || 1920;
-  const scale = Math.min(maxW / viewW, maxH / viewH);
+  // Never upscale the camera stream. Only shrink it when necessary.
+  const scale = Math.min(1, maxW / videoW, maxH / videoH);
   return {
-    width: Math.max(1, Math.round(viewW * scale)),
-    height: Math.max(1, Math.round(viewH * scale))
+    width: Math.max(1, Math.round(videoW * scale)),
+    height: Math.max(1, Math.round(videoH * scale))
   };
+}
+
+function positionStampInsideVideo() {
+  if (!camera.videoWidth || !camera.videoHeight) return;
+  const stageRect = cameraStage.getBoundingClientRect();
+  const videoRect = getVisibleVideoRect();
+  const sidePad = Math.max(10, Math.min(16, videoRect.width * 0.035));
+  const maxStampW = Math.min(360, Math.max(220, videoRect.width - sidePad * 2));
+
+  stamp.style.left = `${videoRect.left - stageRect.left + sidePad}px`;
+  stamp.style.width = `${maxStampW}px`;
+  stamp.style.bottom = 'auto';
+
+  // Keep the watermark inside the actual camera image and above the shutter UI.
+  const stampH = stamp.offsetHeight || 118;
+  const controlClearance = 150;
+  const preferredTop = videoRect.bottom - stageRect.top - stampH - controlClearance;
+  const lowestInsideImage = videoRect.bottom - stageRect.top - stampH - sidePad;
+  const highestInsideImage = videoRect.top - stageRect.top + sidePad;
+  stamp.style.top = `${Math.max(highestInsideImage, Math.min(preferredTop, lowestInsideImage))}px`;
 }
 
 function roundedRect(ctx, x, y, w, h, r) {
@@ -223,13 +285,13 @@ function roundedRect(ctx, x, y, w, h, r) {
 }
 
 function getStampCanvasRect(outputW, outputH) {
-  const stageRect = cameraStage.getBoundingClientRect();
+  const videoRect = getVisibleVideoRect();
   const stampRect = stamp.getBoundingClientRect();
-  const scaleX = outputW / stageRect.width;
-  const scaleY = outputH / stageRect.height;
+  const scaleX = outputW / videoRect.width;
+  const scaleY = outputH / videoRect.height;
   return {
-    x: (stampRect.left - stageRect.left) * scaleX,
-    y: (stampRect.top - stageRect.top) * scaleY,
+    x: (stampRect.left - videoRect.left) * scaleX,
+    y: (stampRect.top - videoRect.top) * scaleY,
     w: stampRect.width * scaleX,
     h: stampRect.height * scaleY
   };
@@ -323,11 +385,9 @@ function capturePhoto() {
   }
 
   const capturedAt = new Date();
-  const stageRect = cameraStage.getBoundingClientRect();
-  const viewW = Math.max(1, stageRect.width);
-  const viewH = Math.max(1, stageRect.height);
-  const crop = getVisibleCoverCrop(camera.videoWidth, camera.videoHeight, viewW, viewH);
-  const size = getCaptureOutputSize(viewW, viewH);
+  // v5 saves the complete camera frame shown by object-fit: contain. No center
+  // crop is applied, so the saved image and preview use the same field of view.
+  const size = getCaptureOutputSize(camera.videoWidth, camera.videoHeight);
 
   canvas.width = size.width;
   canvas.height = size.height;
@@ -337,10 +397,10 @@ function capturePhoto() {
     ctx.save();
     ctx.translate(canvas.width, 0);
     ctx.scale(-1, 1);
-    ctx.drawImage(camera, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(camera, 0, 0, camera.videoWidth, camera.videoHeight, 0, 0, canvas.width, canvas.height);
     ctx.restore();
   } else {
-    ctx.drawImage(camera, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(camera, 0, 0, camera.videoWidth, camera.videoHeight, 0, 0, canvas.width, canvas.height);
   }
 
   drawStamp(ctx, canvas.width, canvas.height, capturedAt);
@@ -455,6 +515,10 @@ closeHistory.addEventListener('click', () => {
   historyPanel.classList.remove('open');
   historyPanel.setAttribute('aria-hidden', 'true');
 });
+
+camera.addEventListener('loadedmetadata', () => requestAnimationFrame(positionStampInsideVideo));
+window.addEventListener('resize', () => requestAnimationFrame(positionStampInsideVideo));
+window.addEventListener('orientationchange', () => setTimeout(positionStampInsideVideo, 150));
 
 loadProfile();
 setAction('IN');
