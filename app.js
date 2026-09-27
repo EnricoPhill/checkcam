@@ -11,6 +11,8 @@ const cameraStage = $('cameraStage');
 const camera = $('camera');
 const canvas = $('captureCanvas');
 const captureFlash = $('captureFlash');
+const focusRing = $('focusRing');
+const syncBadge = $('syncBadge');
 const permissionCard = $('permissionCard');
 const startBtn = $('startBtn');
 const shutterBtn = $('shutterBtn');
@@ -54,6 +56,8 @@ const historyBtn = $('historyBtn');
 const historyPanel = $('historyPanel');
 const closeHistory = $('closeHistory');
 const historyList = $('historyList');
+const settingsCard = settingsPanel.querySelector('.sheet-card');
+const settingsHandle = settingsPanel.querySelector('.sheet-handle');
 
 let stream = null;
 let activeTrack = null;
@@ -67,6 +71,12 @@ let lastGeocodeAt = 0;
 let lastGeocodePosition = null;
 let geocodeRequestId = 0;
 let zoomRaf = null;
+let syncBadgeTimer = null;
+let syncingPending = false;
+
+const DB_NAME = 'checkcam-db';
+const DB_VERSION = 1;
+const PENDING_STORE = 'pending';
 
 function mirrorStorageKey(mode) {
   return mode === 'user' ? 'checkcam.mirror.front' : 'checkcam.mirror.back';
@@ -83,10 +93,8 @@ function getLocationMode() {
 }
 
 function getResolvedLocationName() {
-  if (getLocationMode() === 'manual') return manualLocationName.value.trim() || 'Lokasi belum diisi';
-  if (liveLocationName) return liveLocationName;
-  if (position) return `${position.coords.latitude.toFixed(5)}, ${position.coords.longitude.toFixed(5)}`;
-  return 'Menunggu lokasi';
+  if (getLocationMode() === 'manual') return manualLocationName.value.trim();
+  return liveLocationName || '';
 }
 
 function loadProfile() {
@@ -138,9 +146,11 @@ function updateLocationModeUi() {
 }
 
 function refreshStamp() {
-  stampEmployee.textContent = employeeName.value.trim() || employeeId.value.trim() || 'Belum diatur';
+  stampEmployee.textContent = employeeName.value.trim() || 'Belum diatur';
   stampOpd.textContent = opdName.value.trim() || 'Belum diatur';
-  stampLocationName.textContent = getResolvedLocationName();
+  const resolvedLocation = getResolvedLocationName();
+  stampLocationName.textContent = resolvedLocation;
+  stampLocationName.classList.toggle('hidden', !resolvedLocation);
   if (position) {
     stampCoordinates.textContent = `${position.coords.latitude.toFixed(5)}, ${position.coords.longitude.toFixed(5)}`;
   } else {
@@ -181,16 +191,19 @@ setInterval(updateClock, 1000);
 updateClock();
 
 function formatDuration(ms) {
-  if (!Number.isFinite(ms) || ms < 0) return '--:--:--';
-  const totalSeconds = Math.floor(ms / 1000);
-  const h = Math.floor(totalSeconds / 3600);
-  const m = Math.floor((totalSeconds % 3600) / 60);
-  const s = totalSeconds % 60;
-  return [h, m, s].map((n) => String(n).padStart(2, '0')).join(':');
+  if (!Number.isFinite(ms) || ms < 0) return '--:--';
+  const totalMinutes = Math.floor(ms / 60000);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return [h, m].map((n) => String(n).padStart(2, '0')).join(':');
 }
 
 function activeInStorageKey() {
-  return `checkcam.activeIn.${employeeId.value.trim() || 'unknown'}`;
+  const id = employeeId.value.trim();
+  const name = employeeName.value.trim().toLowerCase();
+  const opd = opdName.value.trim().toLowerCase();
+  const identity = id || `${name}|${opd}` || 'unknown';
+  return `checkcam.activeIn.${encodeURIComponent(identity)}`;
 }
 
 function getActiveInTime() {
@@ -217,7 +230,7 @@ function getWorkDurationMs(at = new Date()) {
 
 function updateWorkDuration(at = new Date()) {
   const ms = getWorkDurationMs(at);
-  stampWorkDuration.textContent = action === 'IN' ? '00:00:00' : formatDuration(ms);
+  stampWorkDuration.textContent = action === 'IN' ? '00:00' : formatDuration(ms);
 }
 
 function setAction(next) {
@@ -336,13 +349,13 @@ async function reverseGeocode(latitude, longitude) {
     if (requestId !== geocodeRequestId) return;
     const parts = [d.locality || d.city, d.principalSubdivision, d.countryName].filter(Boolean);
     const unique = [...new Set(parts.map((x) => String(x).trim()).filter(Boolean))];
-    liveLocationName = unique.join(', ') || `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+    liveLocationName = unique.join(', ');
   } catch (err) {
     console.warn('Could not resolve location name', err);
     if (requestId !== geocodeRequestId) return;
-    liveLocationName = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+    liveLocationName = '';
   }
-  liveLocationText.textContent = liveLocationName;
+  liveLocationText.textContent = liveLocationName || 'Nama area tidak tersedia';
   refreshStamp();
 }
 
@@ -464,7 +477,7 @@ function getStampCanvasRect(outputW, outputH) {
   const x = (stampRect.left - videoRect.left) * scaleX;
   const w = stampRect.width * scaleX;
   const unit = Math.max(1, w / 270);
-  const contentHeight = 146 * unit;
+  const contentHeight = (getResolvedLocationName() ? 146 : 133) * unit;
   const bottomGap = Math.max(0, (videoRect.bottom - stampRect.bottom) * scaleY);
   const y = Math.max(0, outputH - bottomGap - contentHeight);
 
@@ -540,22 +553,28 @@ function drawStamp(ctx, width, height, capturedAt, durationMs) {
   const maxText = right - left;
   ctx.fillStyle = '#fff';
   ctx.font = `800 ${9.5 * unit}px system-ui`;
-  const name = employeeName.value.trim() || employeeId.value.trim() || 'Belum diatur';
+  const name = employeeName.value.trim() || 'Belum diatur';
   ctx.fillText(fitText(ctx, name, maxText), left, r.y + 85 * unit);
 
   ctx.fillStyle = '#d1d5da';
   ctx.font = `650 ${8.7 * unit}px system-ui`;
   ctx.fillText(fitText(ctx, `OPD: ${opdName.value.trim() || 'Belum diatur'}`, maxText), left, r.y + 98 * unit);
-  ctx.fillText(fitText(ctx, getResolvedLocationName(), maxText), left, r.y + 111 * unit);
+
+  const locationName = getResolvedLocationName();
+  let nextY = 111;
+  if (locationName) {
+    ctx.fillText(fitText(ctx, locationName, maxText), left, r.y + nextY * unit);
+    nextY += 12;
+  }
 
   const coordText = position ? `${position.coords.latitude.toFixed(5)}, ${position.coords.longitude.toFixed(5)}` : 'Koordinat belum tersedia';
   ctx.fillStyle = '#aeb5be';
   ctx.font = `600 ${8 * unit}px system-ui`;
-  ctx.fillText(fitText(ctx, coordText, maxText), left, r.y + 123 * unit);
+  ctx.fillText(fitText(ctx, coordText, maxText), left, r.y + nextY * unit);
 
   ctx.fillStyle = '#f4f6f8';
   ctx.font = `750 ${8.5 * unit}px system-ui`;
-  ctx.fillText(fitText(ctx, `Waktu Kerja: ${action === 'IN' ? '00:00:00' : formatDuration(durationMs)}`, maxText), left, r.y + 136 * unit);
+  ctx.fillText(fitText(ctx, `Waktu Kerja: ${action === 'IN' ? '00:00' : formatDuration(durationMs)}`, maxText), left, r.y + (nextY + 13) * unit);
   ctx.restore();
 }
 
@@ -567,7 +586,7 @@ function flashShutter() {
 
 function capturePhoto() {
   if (!camera.videoWidth || !camera.videoHeight) return;
-  if (!employeeId.value.trim() || !employeeName.value.trim() || !opdName.value.trim()) {
+  if (!employeeName.value.trim() || !opdName.value.trim()) {
     openSettings();
     return;
   }
@@ -598,7 +617,9 @@ function capturePhoto() {
 
   const photoData = canvas.toDataURL('image/jpeg', CONFIG.jpegQuality);
   const locationName = getResolvedLocationName();
+  const clientRecordId = (crypto.randomUUID?.() || `cc-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   captured = {
+    clientRecordId,
     photoData,
     capturedAt: capturedAt.toISOString(),
     action,
@@ -636,9 +657,22 @@ function endpointConfigured() {
 }
 
 function saveHistory(item) {
+  // Keep large JPEG data in IndexedDB only; localStorage is just lightweight history metadata.
+  const { photoData, ...historyItem } = item;
   const list = JSON.parse(localStorage.getItem('checkcam.history') || '[]');
-  list.unshift(item);
+  const idx = list.findIndex((x) => x.clientRecordId && x.clientRecordId === historyItem.clientRecordId);
+  if (idx >= 0) list[idx] = { ...list[idx], ...historyItem };
+  else list.unshift(historyItem);
   localStorage.setItem('checkcam.history', JSON.stringify(list.slice(0, 30)));
+}
+
+function updateHistoryState(clientRecordId, patch) {
+  if (!clientRecordId) return;
+  const list = JSON.parse(localStorage.getItem('checkcam.history') || '[]');
+  const idx = list.findIndex((x) => x.clientRecordId === clientRecordId);
+  if (idx < 0) return;
+  list[idx] = { ...list[idx], ...patch };
+  localStorage.setItem('checkcam.history', JSON.stringify(list));
 }
 
 function updateLocalWorkSession(record) {
@@ -647,11 +681,167 @@ function updateLocalWorkSession(record) {
   updateWorkDuration();
 }
 
+function openCheckcamDb() {
+  return new Promise((resolve, reject) => {
+    if (!('indexedDB' in window)) return reject(new Error('IndexedDB tidak tersedia'));
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(PENDING_STORE)) db.createObjectStore(PENDING_STORE, { keyPath: 'id' });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error('Gagal membuka penyimpanan offline'));
+  });
+}
+
+async function withPendingStore(mode, callback) {
+  const db = await openCheckcamDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(PENDING_STORE, mode);
+    const store = tx.objectStore(PENDING_STORE);
+    let value;
+    try { value = callback(store); } catch (err) { db.close(); reject(err); return; }
+    tx.oncomplete = () => { db.close(); resolve(value); };
+    tx.onerror = () => { db.close(); reject(tx.error || new Error('Penyimpanan offline gagal')); };
+    tx.onabort = () => { db.close(); reject(tx.error || new Error('Penyimpanan offline dibatalkan')); };
+  });
+}
+
+async function queuePending(record) {
+  const queuedRecord = { ...record, offlineCaptured: 'true' };
+  await withPendingStore('readwrite', (store) => store.put({
+    id: record.clientRecordId,
+    endpoint: CONFIG.endpoint,
+    queuedAt: new Date().toISOString(),
+    record: queuedRecord
+  }));
+  await updateSyncBadge();
+  registerBackgroundSync();
+}
+
+async function getPendingItems() {
+  const db = await openCheckcamDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(PENDING_STORE, 'readonly');
+    const req = tx.objectStore(PENDING_STORE).getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error || new Error('Gagal membaca antrean offline'));
+    tx.oncomplete = () => db.close();
+  });
+}
+
+async function deletePending(id) {
+  await withPendingStore('readwrite', (store) => store.delete(id));
+}
+
+async function pendingCount() {
+  const db = await openCheckcamDb();
+  return new Promise((resolve) => {
+    const tx = db.transaction(PENDING_STORE, 'readonly');
+    const req = tx.objectStore(PENDING_STORE).count();
+    req.onsuccess = () => resolve(req.result || 0);
+    req.onerror = () => resolve(0);
+    tx.oncomplete = () => db.close();
+  });
+}
+
+async function postRecord(record, endpoint = CONFIG.endpoint) {
+  const body = new URLSearchParams();
+  Object.entries(record).forEach(([k, v]) => {
+    if (v !== undefined && v !== null) body.append(k, String(v));
+  });
+  await fetch(endpoint, { method: 'POST', mode: 'no-cors', body, cache: 'no-store' });
+}
+
+async function reconcileHistoryWithPending() {
+  try {
+    const pending = await getPendingItems();
+    const pendingIds = new Set(pending.map((x) => x.id));
+    const list = JSON.parse(localStorage.getItem('checkcam.history') || '[]');
+    let changed = false;
+    for (const item of list) {
+      if (item.pending && item.clientRecordId && !pendingIds.has(item.clientRecordId)) {
+        item.pending = false;
+        item.submitted = true;
+        item.syncedAt = item.syncedAt || new Date().toISOString();
+        changed = true;
+      }
+    }
+    if (changed) localStorage.setItem('checkcam.history', JSON.stringify(list));
+  } catch (err) {
+    console.warn('Could not reconcile history', err);
+  }
+}
+
+async function updateSyncBadge(message = '') {
+  try {
+    const count = await pendingCount();
+    syncBadge.classList.remove('hidden', 'offline', 'pending', 'synced');
+    if (!navigator.onLine) {
+      syncBadge.textContent = `OFFLINE · ${count} menunggu`;
+      syncBadge.classList.add('offline');
+      return;
+    }
+    if (count > 0) {
+      syncBadge.textContent = message || `${count} absensi menunggu sinkron`;
+      syncBadge.classList.add('pending');
+      return;
+    }
+    if (message) {
+      syncBadge.textContent = message;
+      syncBadge.classList.add('synced');
+      clearTimeout(syncBadgeTimer);
+      syncBadgeTimer = setTimeout(() => syncBadge.classList.add('hidden'), 2200);
+    } else {
+      syncBadge.classList.add('hidden');
+    }
+  } catch (err) {
+    console.warn('Could not update sync status', err);
+  }
+}
+
+async function syncPending() {
+  if (syncingPending || !navigator.onLine || !endpointConfigured()) {
+    await updateSyncBadge();
+    return;
+  }
+  syncingPending = true;
+  try {
+    const items = (await getPendingItems()).sort((a, b) => String(a.record?.capturedAt || '').localeCompare(String(b.record?.capturedAt || '')));
+    if (!items.length) return;
+    await updateSyncBadge('Menyinkronkan…');
+    for (const item of items) {
+      try {
+        await postRecord(item.record, item.endpoint || CONFIG.endpoint);
+        await deletePending(item.id);
+        updateHistoryState(item.id, { pending: false, submitted: true, syncedAt: new Date().toISOString() });
+      } catch (err) {
+        console.warn('Pending sync stopped', err);
+        break;
+      }
+    }
+  } finally {
+    syncingPending = false;
+    await reconcileHistoryWithPending();
+    const left = await pendingCount().catch(() => 0);
+    await updateSyncBadge(left ? '' : 'Semua absensi tersinkron');
+    renderHistory();
+  }
+}
+
+async function registerBackgroundSync() {
+  try {
+    const reg = await navigator.serviceWorker?.ready;
+    if (reg?.sync?.register) await reg.sync.register('checkcam-sync');
+  } catch (err) {
+    console.warn('Background Sync is not available', err);
+  }
+}
+
 async function submitAttendance() {
   if (!captured) return;
   submitBtn.disabled = true;
-  submitStatus.textContent = 'Mengirim…';
-  const record = { ...captured, localSavedAt: new Date().toISOString() };
+  const record = { ...captured, localSavedAt: new Date().toISOString(), offlineCaptured: 'false' };
 
   if (!endpointConfigured()) {
     saveHistory({ ...record, demo: true });
@@ -662,17 +852,41 @@ async function submitAttendance() {
     return;
   }
 
+  if (!navigator.onLine) {
+    try {
+      await queuePending(record);
+      saveHistory({ ...record, pending: true });
+      updateLocalWorkSession(record);
+      submitStatus.textContent = 'Tersimpan di perangkat · menunggu internet.';
+      setTimeout(() => { closePreview(); renderHistory(); }, 1500);
+    } catch (err) {
+      console.error(err);
+      submitStatus.textContent = 'Gagal menyimpan offline. Jangan tutup halaman dan coba lagi.';
+    } finally {
+      submitBtn.disabled = false;
+    }
+    return;
+  }
+
+  submitStatus.textContent = 'Mengirim…';
   try {
-    const body = new URLSearchParams();
-    Object.entries(captured).forEach(([k, v]) => body.append(k, v));
-    await fetch(CONFIG.endpoint, { method: 'POST', mode: 'no-cors', body });
+    await postRecord(record);
     saveHistory({ ...record, submitted: true });
     updateLocalWorkSession(record);
-    submitStatus.textContent = 'Absensi terkirim. Cek Google Sheet untuk catatan server.';
-    setTimeout(() => { closePreview(); renderHistory(); }, 1400);
+    submitStatus.textContent = 'Absensi terkirim.';
+    setTimeout(() => { closePreview(); renderHistory(); }, 1200);
   } catch (err) {
-    console.error(err);
-    submitStatus.textContent = 'Gagal mengirim. Periksa koneksi dan URL Apps Script.';
+    console.warn('Upload failed, queued offline', err);
+    try {
+      await queuePending(record);
+      saveHistory({ ...record, pending: true });
+      updateLocalWorkSession(record);
+      submitStatus.textContent = 'Koneksi terputus · absensi disimpan dan akan disinkronkan.';
+      setTimeout(() => { closePreview(); renderHistory(); }, 1700);
+    } catch (queueErr) {
+      console.error(queueErr);
+      submitStatus.textContent = 'Upload dan penyimpanan offline gagal. Coba lagi.';
+    }
   } finally {
     submitBtn.disabled = false;
   }
@@ -686,15 +900,98 @@ function renderHistory() {
   }
   historyList.innerHTML = list.map((r) => {
     const when = new Date(r.capturedAt).toLocaleString('id-ID');
-    const badge = r.demo ? 'Demo' : 'Terkirim';
+    const badge = r.demo ? 'Demo' : r.pending ? 'Menunggu Sync' : 'Terkirim';
     const actionText = r.action === 'IN' ? 'ABSEN MASUK' : 'ABSEN PULANG';
     const duration = r.action === 'OUT' && r.workDuration ? ` · ${r.workDuration}` : '';
-    return `<div class="history-item"><strong>${actionText} · ${escapeHtml(r.employeeName || r.employeeId)} · ${badge}</strong><span>${escapeHtml(when)}${escapeHtml(duration)}</span><span>${escapeHtml(r.locationName || r.siteName || '')}</span></div>`;
+    return `<div class="history-item"><strong>${actionText} · ${escapeHtml(r.employeeName || 'Tanpa nama')} · ${badge}</strong><span>${escapeHtml(when)}${escapeHtml(duration)}</span><span>${escapeHtml(r.locationName || r.siteName || '')}</span></div>`;
   }).join('');
 }
 
 function escapeHtml(s='') {
   return String(s).replace(/[&<>'"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'}[c]));
+}
+
+function showFocusRing(clientX, clientY) {
+  const stageRect = cameraStage.getBoundingClientRect();
+  focusRing.style.left = `${clientX - stageRect.left}px`;
+  focusRing.style.top = `${clientY - stageRect.top}px`;
+  focusRing.classList.remove('show');
+  void focusRing.offsetWidth;
+  focusRing.classList.add('show');
+}
+
+async function focusAtPoint(clientX, clientY) {
+  if (!activeTrack || !camera.videoWidth || !camera.videoHeight) return;
+  const videoRect = getVisibleVideoRect();
+  if (clientX < videoRect.left || clientX > videoRect.right || clientY < videoRect.top || clientY > videoRect.bottom) return;
+  showFocusRing(clientX, clientY);
+
+  const supported = navigator.mediaDevices?.getSupportedConstraints?.() || {};
+  if (!supported.pointsOfInterest) return;
+  try {
+    const settings = activeTrack.getSettings?.() || {};
+    const sensorW = settings.width || camera.videoWidth;
+    const sensorH = settings.height || camera.videoHeight;
+    let nx = (clientX - videoRect.left) / videoRect.width;
+    const ny = (clientY - videoRect.top) / videoRect.height;
+    if (mirrorEnabled) nx = 1 - nx;
+    const point = {
+      x: Math.max(0, Math.min(sensorW - 1, nx * sensorW)),
+      y: Math.max(0, Math.min(sensorH - 1, ny * sensorH))
+    };
+    const caps = activeTrack.getCapabilities?.() || {};
+    const control = { pointsOfInterest: [point] };
+    if (Array.isArray(caps.focusMode) && caps.focusMode.includes('single-shot')) control.focusMode = 'single-shot';
+    if (facingMode === 'environment' && !zoomControl.classList.contains('hidden')) control.zoom = Number(zoomSlider.value);
+    await activeTrack.applyConstraints({ advanced: [control] });
+  } catch (err) {
+    console.warn('Tap focus is not supported by this camera/browser', err);
+  }
+}
+
+function enableSwipeToClose(panel, card, handle, closeFn) {
+  let startY = 0;
+  let lastY = 0;
+  let dragging = false;
+  const begin = (e) => {
+    if (!panel.classList.contains('open')) return;
+    dragging = true;
+    startY = lastY = e.clientY;
+    card.classList.add('dragging');
+    handle.setPointerCapture?.(e.pointerId);
+  };
+  const move = (e) => {
+    if (!dragging) return;
+    lastY = e.clientY;
+    const dy = lastY - startY;
+    card.style.transform = `translateY(${Math.max(-70, dy)}px)`;
+  };
+  const end = async (e) => {
+    if (!dragging) return;
+    dragging = false;
+    card.classList.remove('dragging');
+    const dy = lastY - startY;
+    if (Math.abs(dy) > 105) {
+      card.style.transform = dy > 0 ? 'translateY(110%)' : 'translateY(-18%)';
+      await closeFn();
+    }
+    card.style.transform = '';
+    try { handle.releasePointerCapture?.(e.pointerId); } catch (_) {}
+  };
+  handle.addEventListener('pointerdown', begin);
+  handle.addEventListener('pointermove', move);
+  handle.addEventListener('pointerup', end);
+  handle.addEventListener('pointercancel', end);
+  panel.addEventListener('click', (e) => { if (e.target === panel) closeFn(); });
+}
+
+async function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    await navigator.serviceWorker.register('./sw.js', { scope: './' });
+  } catch (err) {
+    console.warn('Service worker registration failed', err);
+  }
 }
 
 startBtn.addEventListener('click', beginPermissions);
@@ -727,8 +1024,14 @@ closeHistory.addEventListener('click', () => {
 });
 
 camera.addEventListener('loadedmetadata', () => requestAnimationFrame(positionStampInsideVideo));
+camera.addEventListener('pointerup', (e) => focusAtPoint(e.clientX, e.clientY));
 window.addEventListener('resize', () => requestAnimationFrame(positionStampInsideVideo));
+window.addEventListener('online', () => { updateSyncBadge('Koneksi kembali'); syncPending(); });
+window.addEventListener('offline', () => updateSyncBadge());
 
+enableSwipeToClose(settingsPanel, settingsCard, settingsHandle, closeSettingsPanel);
+registerServiceWorker();
 loadProfile();
 setAction('IN');
 refreshStamp();
+reconcileHistoryWithPending().then(() => { updateSyncBadge(); syncPending(); });

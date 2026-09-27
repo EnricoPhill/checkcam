@@ -115,3 +115,50 @@ input:focus { border-color: rgba(255,255,255,.38); }
   .camera-controls { padding-left: 14px; padding-right: 14px; }
   .zoom-control { width: 126px; right: 10px; }
 }
+
+
+/* v7: offline status, tap focus, and draggable employee sheet */
+.focus-ring {
+  position: absolute;
+  z-index: 12;
+  width: 58px;
+  height: 58px;
+  border: 2px solid rgba(255,255,255,.95);
+  border-radius: 12px;
+  transform: translate(-50%, -50%) scale(1.18);
+  opacity: 0;
+  pointer-events: none;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.28), 0 2px 14px rgba(0,0,0,.22);
+}
+.focus-ring.show { animation: focusPulse .85s ease-out; }
+@keyframes focusPulse {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(1.28); }
+  22% { opacity: 1; transform: translate(-50%, -50%) scale(.92); }
+  72% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+}
+.sync-badge {
+  position: absolute;
+  z-index: 9;
+  top: calc(env(safe-area-inset-top) + 64px);
+  left: 13px;
+  max-width: calc(100% - 26px);
+  padding: 6px 9px;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 999px;
+  background: rgba(8,10,13,.68);
+  color: #f0f3f6;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: .025em;
+  pointer-events: none;
+}
+.sync-badge.offline { background: rgba(255,166,60,.16); color: #ffe1b5; border-color: rgba(255,166,60,.28); }
+.sync-badge.pending { background: rgba(85,161,255,.16); color: #d7e9ff; border-color: rgba(85,161,255,.28); }
+.sync-badge.synced { background: rgba(67,209,122,.16); color: #d8ffe5; border-color: rgba(67,209,122,.25); }
+.stamp { pointer-events: none; }
+.optional-label { color: #858e99; font-size: 11px; font-weight: 650; }
+.sheet-card { will-change: transform; touch-action: pan-y; transition: transform .18s ease-out; }
+.sheet-card.dragging { transition: none; }
+.sheet-handle { cursor: grab; touch-action: none; }
+.sheet-handle:active { cursor: grabbing; }

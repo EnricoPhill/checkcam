@@ -4,6 +4,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#000000" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
   <title>CheckCam Attendance</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -13,6 +17,8 @@
       <video id="camera" playsinline autoplay muted></video>
       <canvas id="captureCanvas" hidden></canvas>
       <div id="captureFlash" class="capture-flash" aria-hidden="true"></div>
+      <div id="focusRing" class="focus-ring" aria-hidden="true"></div>
+      <div id="syncBadge" class="sync-badge hidden" aria-live="polite"></div>
 
       <div class="topbar">
         <button id="settingsBtn" class="round-btn" aria-label="Data pegawai">☰</button>
@@ -49,7 +55,7 @@
         <div class="stamp-line muted"><span>OPD: </span><span id="stampOpd">Belum diatur</span></div>
         <div id="stampLocationName" class="stamp-line muted">Menunggu lokasi</div>
         <div id="stampCoordinates" class="stamp-line subtle">--</div>
-        <div class="stamp-line work"><span>Waktu Kerja: </span><strong id="stampWorkDuration">00:00:00</strong></div>
+        <div class="stamp-line work"><span>Waktu Kerja: </span><strong id="stampWorkDuration">00:00</strong></div>
       </div>
 
       <div class="camera-controls">
@@ -72,7 +78,7 @@
           <h2>Data pegawai</h2>
           <button id="closeSettings" class="text-btn">Selesai</button>
         </div>
-        <label>ID Pegawai<input id="employeeId" autocomplete="off" placeholder="EMP-001" /></label>
+        <label>ID Pegawai <span class="optional-label">(opsional)</span><input id="employeeId" autocomplete="off" placeholder="EMP-001 (opsional)" /></label>
         <label>Nama Pegawai<input id="employeeName" autocomplete="name" placeholder="Nama lengkap" /></label>
         <label>OPD / Company<input id="opdName" autocomplete="organization" placeholder="Nama OPD / Perusahaan" /></label>
 
@@ -90,7 +96,7 @@
             <input id="manualLocationName" autocomplete="off" placeholder="Contoh: Kantor Dinas Utama" />
           </label>
         </fieldset>
-        <p class="helper">Live Location mengambil nama area dari posisi GPS. Jika gagal mendapatkan nama area, koordinat tetap digunakan. Kamera dijeda saat panel ini terbuka agar pengetikan tetap responsif.</p>
+        <p class="helper">Live Location mengambil nama area dari posisi GPS. Jika nama area tidak ditemukan atau perangkat sedang offline, baris nama lokasi dibiarkan kosong. Koordinat tetap tampil pada baris terpisah. Kamera dijeda saat panel ini terbuka agar pengetikan tetap responsif.</p>
       </div>
     </aside>
 
